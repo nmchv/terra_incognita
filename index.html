@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="TERRA INCOGNITA — образовательная браузерная игра: исследуйте неизвестную планету и открывайте её территории с помощью географии.">
+  <meta name="theme-color" content="#08131f">
+  <title>TERRA INCOGNITA — исследование планеты X-01</title>
+  <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles/main.css">
+</head>
+<body data-screen="start">
+  <a class="skip-link" href="#main">К основному содержимому</a>
+  <noscript><p class="noscript">Для игры нужен включённый JavaScript.</p></noscript>
+
+  <div id="boot-error" class="boot-error" role="alert" hidden></div>
+
+  <!-- Стартовый экран -->
+  <section id="screen-start" class="screen start" aria-labelledby="game-title">
+    <div class="start-card">
+      <p class="eyebrow">Экспедиция · планета X-01</p>
+      <h1 id="game-title">TERRA INCOGNITA</h1>
+      <p class="lead">Неизвестная планета. Небольшой участок берега на экранах и ни одной карты. Исследуйте территории, применяйте знания о рельефе, климате и водах, делайте выводы и открывайте новые земли.</p>
+      <p id="continue-info" class="continue-info" hidden></p>
+      <div class="start-actions">
+        <button id="btn-continue" type="button" class="btn btn-primary btn-big" hidden>Продолжить</button>
+        <button id="btn-start" type="button" class="btn btn-primary btn-big">Начать исследование</button>
+        <button id="btn-settings" type="button" class="btn btn-ghost btn-big">Настройки</button>
+        <button id="btn-about" type="button" class="btn btn-ghost btn-big">Об игре</button>
+      </div>
+      <p class="start-foot">Школьникам 5–11 классов · русский язык · прогресс хранится в вашем браузере</p>
+    </div>
+    <svg class="start-globe" viewBox="0 0 200 200" aria-hidden="true">
+      <circle cx="100" cy="100" r="92" class="g-sphere"/>
+      <ellipse cx="100" cy="100" rx="92" ry="34" class="g-line"/>
+      <ellipse cx="100" cy="100" rx="40" ry="92" class="g-line"/>
+      <line x1="8" y1="100" x2="192" y2="100" class="g-line"/>
+      <path d="M62 52 L98 44 L118 66 L104 92 L70 88 Z" class="g-land"/>
+      <path d="M96 112 L134 104 L146 134 L118 156 L92 140 Z" class="g-land"/>
+      <path d="M52 118 L70 112 L74 134 L56 140 Z" class="g-land"/>
+    </svg>
+  </section>
+
+  <!-- Основной игровой экран -->
+  <section id="screen-game" class="screen game" hidden>
+    <header class="topbar">
+      <div class="topbar-title">
+        <span class="logo">TERRA INCOGNITA</span>
+        <span class="planet">планета X-01</span>
+      </div>
+      <div class="topbar-progress">
+        <div class="progress-label">Исследовано территорий: <strong id="top-explored">0 / 12</strong></div>
+        <div id="top-bar" class="bar" role="progressbar" aria-label="Общий прогресс исследования" aria-valuemin="0" aria-valuenow="0" aria-valuemax="12">
+          <div id="top-bar-fill" class="bar-fill"></div>
+        </div>
+      </div>
+      <div class="topbar-points" title="Исследовательские очки"><span class="points-label">Очки</span> <strong id="top-points">0</strong></div>
+      <div class="topbar-buttons">
+        <button id="btn-journal" type="button" class="btn btn-ghost">Журнал</button>
+        <button id="btn-settings-g" type="button" class="btn btn-ghost">Настройки</button>
+        <button id="btn-menu" type="button" class="btn btn-ghost">Меню</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <main id="main" class="map-wrap" tabindex="-1" aria-label="Карта планеты">
+        <div id="map" class="map"></div>
+        <ul class="legend" aria-label="Условные обозначения">
+          <li><span class="lg lg-hidden">?</span> не обнаружена</li>
+          <li><span class="lg lg-discovered">!</span> обнаружена</li>
+          <li><span class="lg lg-exploring">…</span> исследуется</li>
+          <li><span class="lg lg-explored">✓</span> исследована</li>
+          <li><span class="lg lg-full">★</span> изучена полностью</li>
+        </ul>
+      </main>
+
+      <aside id="panel-right" class="panel panel-right" aria-labelledby="sector-title">
+        <div id="sector-body"></div>
+      </aside>
+
+      <aside id="panel-left" class="panel panel-left" aria-label="Журнал и прогресс">
+        <section>
+          <h2>Миссия</h2>
+          <p id="mission-text"></p>
+        </section>
+        <section>
+          <h2>Прогресс</h2>
+          <dl id="stats" class="stats"></dl>
+        </section>
+        <section>
+          <h2>Журнал экспедиции</h2>
+          <ul id="journal-recent" class="journal-list"></ul>
+          <button id="btn-journal-2" type="button" class="btn btn-ghost btn-wide">Открыть журнал</button>
+        </section>
+        <section>
+          <h2>Достижения</h2>
+          <ul id="achievements" class="ach-list"></ul>
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <input id="import-file" type="file" accept="application/json,.json" hidden>
+
+  <script src="scripts/data-bundle.js"></script>
+  <script src="scripts/storage.js"></script>
+  <script src="scripts/game.js"></script>
+  <script src="scripts/map.js"></script>
+  <script src="scripts/tasks.js"></script>
+  <script src="scripts/ui.js"></script>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

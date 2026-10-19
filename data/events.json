@@ -1,0 +1,9 @@
+{
+ "gameStart": "Экспедиция началась. Приборы фиксируют небольшой участок берега.",
+ "sectorDiscovered": "Обнаружена территория: «{name}».",
+ "sectorExplored": "Исследован сектор «{name}». {journal}",
+ "sectorFull": "Сектор «{name}» изучен полностью.",
+ "discovery": "Открытие: «{name}».",
+ "achievement": "Достижение: «{name}».",
+ "taskDone": "Выполнено задание «{title}»."
+}
