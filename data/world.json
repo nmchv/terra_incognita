@@ -6,6 +6,9 @@
     "mapHeight": 620,
     "startSector": "sector-01"
   },
+  "chapters": [
+    { "id": 1, "title": "Глава 1. Планета X-01", "shortTitle": "Глава 1", "grade": "6 класс", "startSector": "sector-01" }
+  ],
   "points": { "normal": 100, "complex": 150, "extra": 50 },
   "intro": {
     "title": "Экспедиция на планету X-01",

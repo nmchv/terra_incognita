@@ -2,7 +2,7 @@
 (function (TI) {
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
-  var svg, onSelect, activeId = null, nodes = {}, routeLayer, labelLayer;
+  var svg, onSelect, activeId = null, nodes = {}, routeLayer, labelLayer, showRoutes = true;
 
   var STATUS_LABEL = {
     hidden: 'Не обнаружена', discovered: 'Обнаружена', exploring: 'Исследуется',
@@ -28,7 +28,7 @@
     return [words.slice(0, best).join(' '), words.slice(best).join(' ')];
   }
 
-  function buildStatic(world) {
+  function buildStatic(view) {
     var defs = el('defs', null, svg);
     var g = el('linearGradient', { id: 'oceanGrad', x1: '0', y1: '0', x2: '0', y2: '1' }, defs);
     el('stop', { offset: '0', 'stop-color': '#0b2038' }, g);
@@ -43,16 +43,25 @@
     el('rect', { width: '14', height: '14', fill: '#0c1b2c' }, pFog);
     el('path', { d: 'M0 14 L14 0', stroke: '#16293d', 'stroke-width': '1.5' }, pFog);
 
-    el('rect', { x: '0', y: '0', width: world.planet.mapWidth, height: world.planet.mapHeight, fill: 'url(#oceanGrad)' }, svg);
+    el('rect', { x: '0', y: '0', width: view.mapWidth, height: view.mapHeight, fill: 'url(#oceanGrad)' }, svg);
     var grid = el('g', { 'class': 'graticule', 'aria-hidden': 'true' }, svg);
-    for (var x = 100; x < world.planet.mapWidth; x += 100) el('line', { x1: x, y1: 0, x2: x, y2: world.planet.mapHeight }, grid);
-    for (var y = 100; y < world.planet.mapHeight; y += 100) el('line', { x1: 0, y1: y, x2: world.planet.mapWidth, y2: y }, grid);
-    var t1 = el('text', { x: 28, y: 598, 'class': 'map-caption', 'aria-hidden': 'true' }, svg);
-    t1.textContent = world.planet.title + ' · схема дистанционного сканирования';
-    var t2 = el('text', { x: 40, y: 330, 'class': 'ocean-label', 'aria-hidden': 'true', transform: 'rotate(-90 40 330)' }, svg);
-    t2.textContent = 'ОКЕАН';
+    for (var x = 100; x < view.mapWidth; x += 100) el('line', { x1: x, y1: 0, x2: x, y2: view.mapHeight }, grid);
+    for (var y = 100; y < view.mapHeight; y += 100) el('line', { x1: 0, y1: y, x2: view.mapWidth, y2: y }, grid);
+    // фон: схематичные очертания суши (необязательно, для глав с картой материков)
+    if (view.backdrop && view.backdrop.length) {
+      var bg = el('g', { 'class': 'backdrop', 'aria-hidden': 'true' }, svg);
+      view.backdrop.forEach(function (pts) { el('polygon', { points: pts }, bg); });
+    }
+    var cap = view.captionPos || [28, view.mapHeight - 22];
+    var t1 = el('text', { x: cap[0], y: cap[1], 'class': 'map-caption', 'aria-hidden': 'true' }, svg);
+    t1.textContent = view.caption || '';
+    if (view.oceanLabel) {
+      var t2 = el('text', { x: 40, y: view.mapHeight / 2, 'class': 'ocean-label', 'aria-hidden': 'true', transform: 'rotate(-90 40 ' + (view.mapHeight / 2) + ')' }, svg);
+      t2.textContent = view.oceanLabel;
+    }
     // компас
-    var c = el('g', { 'class': 'compass', transform: 'translate(930 70)', 'aria-hidden': 'true' }, svg);
+    var cp = view.compass || [930, 70];
+    var c = el('g', { 'class': 'compass', transform: 'translate(' + cp[0] + ' ' + cp[1] + ')', 'aria-hidden': 'true' }, svg);
     el('circle', { r: '34' }, c);
     el('path', { d: 'M0 -28 L7 0 L0 28 L-7 0 Z', 'class': 'compass-needle' }, c);
     var n = el('text', { y: '-40', 'text-anchor': 'middle' }, c); n.textContent = 'С';
@@ -61,15 +70,16 @@
     var w = el('text', { x: '-46', y: '5', 'text-anchor': 'middle' }, c); w.textContent = 'З';
   }
 
-  function init(container, world, sectors, selectCb) {
-    onSelect = selectCb;
+  /** view: {mapWidth, mapHeight, caption, oceanLabel, ariaLabel, compass, backdrop[]} — описание карты главы. */
+  function init(container, view, sectors, selectCb) {
+    onSelect = selectCb; activeId = null; showRoutes = view.routes !== false;
     container.innerHTML = '';
     svg = el('svg', {
-      viewBox: '0 0 ' + world.planet.mapWidth + ' ' + world.planet.mapHeight,
-      role: 'group', 'aria-label': 'Карта планеты X-01', 'class': 'planet-map', preserveAspectRatio: 'xMidYMid meet'
+      viewBox: '0 0 ' + view.mapWidth + ' ' + view.mapHeight,
+      role: 'group', 'aria-label': view.ariaLabel || 'Карта', 'class': 'planet-map', preserveAspectRatio: 'xMidYMid meet'
     });
     container.appendChild(svg);
-    buildStatic(world);
+    buildStatic(view);
     nodes = {};
     routeLayer = el('g', { 'class': 'routes', 'aria-hidden': 'true' }, svg);
     labelLayer = el('g', { 'class': 'labels', 'aria-hidden': 'true' }, svg);
@@ -131,7 +141,7 @@
       if (!Object.prototype.hasOwnProperty.call(nodes, sid)) continue;
       var sec = nodes[sid].s;
       if (getStatus(sid) === 'hidden') continue;
-      (sec.requires || []).forEach(function (r) {
+      if (showRoutes) (sec.requires || []).forEach(function (r) {
         var from = nodes[r].s;
         var done = getStatus(r) === 'explored' || getStatus(r) === 'full';
         var line = el('line', {

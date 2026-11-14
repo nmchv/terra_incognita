@@ -3,6 +3,8 @@
   'use strict';
   var h = TI.UI.h, G = TI.Game, S = TI.Storage;
   var FILES = ['world', 'sectors', 'tasks', 'discoveries', 'events'];
+  var CHAPTER_FILES = ['chapter2']; // необязательные файлы с дополнительными главами
+  var mapChapter = null;            // глава, для которой сейчас построена карта
   var started = false;      // начата ли игра (есть что сохранять)
   var selectedId = null;
   var pendingCorrupt = null; // {raw, error}
@@ -16,6 +18,24 @@
   }
 
   /* ---------- Загрузка данных ---------- */
+  /** Добавляет к данным главы из дополнительных файлов (сектора, задания, открытия, достижения). */
+  function mergeChapters(d, extras) {
+    extras.forEach(function (x) {
+      if (!x || !x.chapter) return;
+      d.world.chapters = (d.world.chapters || []).concat([x.chapter]);
+      d.sectors = d.sectors.concat(x.sectors || []);
+      d.tasks = d.tasks.concat(x.tasks || []);
+      d.discoveries = d.discoveries.concat(x.discoveries || []);
+      d.world.achievements = d.world.achievements.concat(x.achievements || []);
+    });
+    return d;
+  }
+  function fromBundle(b) {
+    var d = JSON.parse(JSON.stringify(b)); // копия: слияние не должно менять исходный пакет
+    var extras = CHAPTER_FILES.map(function (f) { var x = d[f]; delete d[f]; return x; });
+    return mergeChapters(d, extras);
+  }
+
   function loadData() {
     return Promise.all(FILES.map(function (f) {
       return fetch('data/' + f + '.json', { cache: 'no-cache' }).then(function (r) {
@@ -23,10 +43,14 @@
         return r.json();
       });
     })).then(function (arr) {
-      var d = {}; FILES.forEach(function (f, i) { d[f] = arr[i]; }); return d;
+      var d = {}; FILES.forEach(function (f, i) { d[f] = arr[i]; });
+      // дополнительные главы: если файла нет, игра работает с тем, что есть
+      return Promise.all(CHAPTER_FILES.map(function (f) {
+        return fetch('data/' + f + '.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
+      })).then(function (extras) { return mergeChapters(d, extras); });
     }).catch(function (e) {
       // запуск с диска (file://): fetch недоступен, используем встроенную копию тех же данных
-      if (window.TI_BUNDLE) { console.info('[TERRA INCOGNITA] fetch недоступен, используется data-bundle.js:', e && e.message); return window.TI_BUNDLE; }
+      if (window.TI_BUNDLE) { console.info('[TERRA INCOGNITA] fetch недоступен, используется data-bundle.js:', e && e.message); return fromBundle(window.TI_BUNDLE); }
       throw e;
     });
   }
@@ -66,7 +90,7 @@
         }
       }
       applySettings();
-      TI.Map.init($('map'), G.data.world, G.data.sectors, selectSector);
+      initMap();
       bindStatic();
       renderStart();
       show('start');
@@ -92,7 +116,8 @@
     var info = $('continue-info');
     if (started) {
       info.hidden = false;
-      info.textContent = 'Сохранено: исследовано территорий — ' + st.explored + ' из ' + st.total + ', очков — ' + st.points + '.';
+      var parts = G.chapters().map(function (c) { var cs = G.stats(c.id); return 'глава ' + c.id + ' — ' + cs.explored + ' из ' + cs.total; });
+      info.textContent = 'Сохранено: исследовано территорий: ' + parts.join('; ') + '. Очков — ' + st.points + '.';
     } else info.hidden = true;
   }
 
@@ -126,7 +151,7 @@
     G.markIntroSeen();
     started = true;
     persist();
-    enterGame(G.data.world.planet.startSector);
+    enterGame();
   }
 
   function startClicked() {
@@ -139,23 +164,74 @@
     else beginGame();
   }
 
+  function chapterStart() { return G.chapter(G.getChapter()).startSector; }
+
+  function initMap() {
+    var n = G.getChapter();
+    TI.Map.init($('map'), G.chapter(n).map, G.sectorsOf(n), selectSector);
+    mapChapter = n;
+  }
+
   function enterGame(selectId) {
     show('game');
     selectedId = null;
     refresh();
-    selectSector(selectId || G.data.world.planet.startSector, true);
+    selectSector(selectId || chapterStart(), true);
     var m = $('main'); if (m && m.focus) m.focus({ preventScroll: true });
+    var n = G.getChapter();
+    if (n > 1 && !G.introSeen(n)) openChapterIntro(n);
+  }
+
+  /* ---------- Главы ---------- */
+  function renderTabs() {
+    var box = $('chapter-tabs');
+    if (!box) return;
+    box.innerHTML = '';
+    var cur = G.getChapter(), list = G.chapters();
+    box.hidden = list.length < 2;
+    list.forEach(function (c) {
+      var info = G.chapter(c.id), open = G.chapterUnlocked(c.id), st = G.stats(c.id);
+      var b = h('button', { type: 'button', 'class': 'chapter-tab' + (c.id === cur ? ' active' : ''), 'aria-pressed': c.id === cur ? 'true' : 'false',
+        'aria-label': info.title + (info.grade ? ', ' + info.grade : '') + '. Исследовано ' + st.explored + ' из ' + st.total + (open ? '.' : '. Откроется после главы ' + info.requiresChapter + '.') }, [
+        h('span', { 'class': 'chapter-tab-title', text: info.shortTitle || info.title }),
+        h('span', { 'class': 'chapter-tab-sub', text: (info.grade ? info.grade + ' · ' : '') + (open ? st.explored + '/' + st.total : 'закрыто') })
+      ]);
+      if (!open) b.disabled = true;
+      b.addEventListener('click', function () { if (c.id !== G.getChapter()) switchChapter(c.id); });
+      box.appendChild(b);
+    });
+  }
+
+  function switchChapter(n) {
+    G.setChapter(n); persist();
+    selectedId = null;
+    initMap();
+    refresh();
+    selectSector(chapterStart(), true);
+    if (n > 1 && !G.introSeen(n)) openChapterIntro(n);
+  }
+
+  function openChapterIntro(n) {
+    var info = G.chapter(n), w = info.intro;
+    G.markIntro(n); persist();
+    var content = h('div', { 'class': 'intro' });
+    (w.paragraphs || []).forEach(function (p) { content.appendChild(h('p', { text: p })); });
+    var go = h('button', { type: 'button', 'class': 'btn btn-primary', 'data-autofocus': '1', text: w.button || 'К карте' });
+    content.appendChild(h('div', { 'class': 'task-actions' }, [go]));
+    var m = TI.UI.modal({ title: w.title, content: content, className: 'modal-wide', dismissible: true });
+    go.addEventListener('click', m.close);
   }
 
   /* ---------- Основной экран ---------- */
   function refresh(newIds) {
+    if (mapChapter !== G.getChapter()) initMap();
     TI.Map.render(G.sectorStatus, newIds || []);
     TI.Map.setActive(selectedId);
-    renderTop(); renderLeft(); renderSector();
+    renderTabs(); renderTop(); renderLeft(); renderSector();
   }
 
   function renderTop() {
-    var st = G.stats();
+    var st = G.stats(G.getChapter());
     $('top-points').textContent = String(st.points);
     $('top-explored').textContent = st.explored + ' / ' + st.total;
     var pct = Math.round(st.explored / st.total * 100);
@@ -168,8 +244,8 @@
   function listItem(text, cls) { return h('li', { 'class': cls || '', text: text }); }
 
   function renderLeft() {
-    var st = G.stats(), state = G.getState();
-    $('mission-text').textContent = G.data.world.mission;
+    var ch = G.getChapter(), st = G.stats(ch), state = G.getState();
+    $('mission-text').textContent = G.chapter(ch).mission;
     var grid = $('stats');
     grid.innerHTML = '';
     [['Исследовано территорий', st.explored + ' / ' + st.total], ['Заданий выполнено', st.tasks + ' / ' + st.totalTasks],
@@ -180,7 +256,7 @@
     var j = $('journal-recent'); j.innerHTML = '';
     state.journal.slice(-4).reverse().forEach(function (e) { j.appendChild(listItem(e.text, 'j-' + e.kind)); });
     var a = $('achievements'); a.innerHTML = '';
-    G.data.world.achievements.forEach(function (ach) {
+    G.data.world.achievements.filter(function (ach) { return (ach.chapter || 1) === ch; }).forEach(function (ach) {
       var got = state.progress.achievementIds.indexOf(ach.id) !== -1;
       var li = h('li', { 'class': got ? 'ach ach-got' : 'ach' }, [
         h('span', { 'class': 'ach-mark', 'aria-hidden': 'true', text: got ? '★' : '○' }),
@@ -280,36 +356,42 @@
     if (res && res.newSectors.length) selectedId = res.newSectors[0];
     refresh(newIds);
     if (res && res.newSectors.length) setTimeout(function () { TI.Map.focusSector(selectedId); }, 50);
-    if (G.allExplored() && !G.getState().progress.finaleShown) {
+    var ch = G.getChapter();
+    if (G.allExplored(ch) && !G.finaleShown(ch)) {
       // показываем итог, только если не открыто другое окно; иначе — при следующем возврате на карту
       setTimeout(function () {
-        if (document.querySelector('.overlay') || G.getState().progress.finaleShown) return;
-        G.getState().progress.finaleShown = true; persist();
-        finale();
+        if (document.querySelector('.overlay') || G.finaleShown(ch)) return;
+        G.markFinale(ch); persist();
+        finale(ch);
       }, 300);
     }
   }
 
-  function finale() {
-    var st = G.stats();
-    var c = h('div', { 'class': 'intro' }, [
-      h('p', { text: 'Все 12 территорий планеты X-01 исследованы. Теперь видно, как устроен этот мир: горы собирают влагу с океана, реки текут вниз к котловинам и океану, за хребтом лежат сухие земли, а океанические течения смягчают климат побережий.' }),
-      h('p', { text: 'Исследовательских очков: ' + st.points + '. Открытий: ' + st.discoveries + ' из ' + st.totalDiscoveries + '. Полностью изучено территорий: ' + st.full + ' из ' + st.total + '.' }),
-      h('p', { 'class': 'note', text: 'Если какие-то дополнительные задания остались, вернитесь в сектора и завершите их — это даст звание «полностью изучено».' })
-    ]);
+  function finale(n) {
+    var st = G.stats(n), info = G.chapter(n), f = info.finale;
+    var paras = f ? f.paragraphs : ['Все 12 территорий планеты X-01 исследованы. Теперь видно, как устроен этот мир: горы собирают влагу с океана, реки текут вниз к котловинам и океану, за хребтом лежат сухие земли, а океанические течения смягчают климат побережий.'];
+    var c = h('div', { 'class': 'intro' });
+    paras.forEach(function (p) { c.appendChild(h('p', { text: p })); });
+    c.appendChild(h('p', { text: 'Исследовательских очков: ' + st.points + '. Открытий: ' + st.discoveries + ' из ' + st.totalDiscoveries + '. Полностью изучено территорий: ' + st.full + ' из ' + st.total + '.' }));
+    c.appendChild(h('p', { 'class': 'note', text: 'Если какие-то дополнительные задания остались, вернитесь в сектора и завершите их — это даст звание «полностью изучено».' }));
     var ok = h('button', { type: 'button', 'class': 'btn btn-primary', 'data-autofocus': '1', text: 'Вернуться к карте' });
-    c.appendChild(h('div', { 'class': 'task-actions' }, [ok]));
-    var m = TI.UI.modal({ title: 'Планета X-01 исследована', content: c, className: 'modal-wide' });
+    var acts = [ok];
+    var nextCh = G.chapters().filter(function (x) { return x.id === n + 1 && G.chapterUnlocked(x.id); })[0];
+    if (nextCh) acts.push(h('button', { type: 'button', 'class': 'btn btn-ghost', 'data-next': '1', text: 'Перейти к главе ' + nextCh.id }));
+    c.appendChild(h('div', { 'class': 'task-actions' }, acts));
+    var m = TI.UI.modal({ title: f ? f.title : 'Планета X-01 исследована', content: c, className: 'modal-wide' });
     ok.addEventListener('click', m.close);
+    if (nextCh) acts[1].addEventListener('click', function () { m.close(); switchChapter(nextCh.id); });
   }
 
   /* ---------- Журнал ---------- */
   function openJournal() {
     var state = G.getState(), c = h('div', { 'class': 'journal' });
     c.appendChild(h('h3', { text: 'Текущая миссия' }));
-    c.appendChild(h('p', { text: G.data.world.mission }));
+    var chInfo = G.chapter(G.getChapter());
+    c.appendChild(h('p', { text: chInfo.mission }));
     c.appendChild(h('h3', { text: 'Известные сведения' }));
-    var kf = h('ul'); G.data.world.knownFacts.forEach(function (f) { kf.appendChild(listItem(f)); }); c.appendChild(kf);
+    var kf = h('ul'); chInfo.knownFacts.forEach(function (f) { kf.appendChild(listItem(f)); }); c.appendChild(kf);
 
     c.appendChild(h('h3', { text: 'Последние события' }));
     var ev = h('ul', { 'class': 'events' });
@@ -318,7 +400,7 @@
     c.appendChild(ev);
 
     c.appendChild(h('h3', { text: 'Завершённые исследования' }));
-    var ex = G.data.sectors.filter(function (s) { return G.isExplored(s.id); });
+    var ex = G.data.sectors.filter(function (s) { return G.isExplored(s.id) && G.chapterOf(s) === G.getChapter(); });
     if (!ex.length) c.appendChild(h('p', { 'class': 'note', text: 'Пока ни одна территория не исследована.' }));
     ex.forEach(function (s) { c.appendChild(h('div', { 'class': 'discovery' }, [h('strong', { text: s.name }), h('p', { text: s.journal })])); });
 
@@ -370,7 +452,7 @@
         if (!ok) return;
         m.close();
         S.clear(); S.backupCorrupt(''); started = false; selectedId = null;
-        G.newGame(); applySettings(); refresh(); renderStart(); show('start');
+        G.newGame(); applySettings(); initMap(); refresh(); renderStart(); show('start');
         TI.UI.toast('Прогресс сброшен. Можно начать новую экспедицию.', 'info');
       });
     });
@@ -397,7 +479,7 @@
         }).then(function (ok) {
           if (!ok) { if (done) done(false); return; }
           G.setState(next); started = true; persist(); applySettings();
-          renderStart(); enterGame(G.data.world.planet.startSector);
+          renderStart(); initMap(); enterGame();
           TI.UI.toast('Сохранение загружено.', 'info');
           if (done) done(true);
         });
@@ -411,7 +493,7 @@
   /* ---------- Привязка кнопок ---------- */
   function bindStatic() {
     $('btn-start').addEventListener('click', startClicked);
-    $('btn-continue').addEventListener('click', function () { enterGame(G.data.world.planet.startSector); });
+    $('btn-continue').addEventListener('click', function () { enterGame(); });
     $('btn-settings').addEventListener('click', openSettings);
     $('btn-about').addEventListener('click', openAbout);
     $('btn-journal').addEventListener('click', openJournal);

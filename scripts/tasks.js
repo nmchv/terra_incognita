@@ -8,7 +8,11 @@
     analysis: 'Географический анализ',
     map_click: 'Задание на карте'
   };
-  var TOPIC_LABEL = { orientation: 'Ориентирование', relief: 'Рельеф', climate: 'Климат', water: 'Воды' };
+  var TOPIC_LABEL = {
+    orientation: 'Ориентирование', relief: 'Рельеф', climate: 'Климат', water: 'Воды',
+    shell: 'Закономерности природы', litho: 'Литосфера', atmo: 'Атмосфера', ocean: 'Мировой океан',
+    climates: 'Климаты Земли', population: 'Население', peoples: 'Страны и народы', continents: 'Материки и страны', society: 'Природа и общество'
+  };
 
   function h(tag, attrs, children) {
     var e = document.createElement(tag);
@@ -65,6 +69,8 @@
         s('rect', { x: it.x, y: it.y, width: it.w, height: it.h, 'class': c }, svg);
       } else if (it.t === 'poly') {
         s('polygon', { points: it.pts, 'class': c + ' d-poly' }, svg);
+      } else if (it.t === 'line') {
+        s('polyline', { points: it.pts, 'class': 'd-line ' + c, fill: 'none' }, svg);
       }
     });
     d.items.forEach(function (it) {
@@ -94,7 +100,7 @@
         var dt = s('text', { 'class': 'd-text d-halo', x: it.x, y: it.y - 9, 'text-anchor': 'middle' }, svg);
         dt.textContent = it.label; desc.push(it.label);
       } else if (it.t === 'text') {
-        var tx = s('text', { 'class': 'd-text d-halo d-caption', x: it.x, y: it.y, 'text-anchor': 'middle' }, svg);
+        var tx = s('text', { 'class': 'd-text d-halo d-caption' + (it.sm ? ' d-small' : ''), x: it.x, y: it.y, 'text-anchor': it.a || 'middle' }, svg);
         tx.textContent = it.s; desc.push(it.s);
       }
     });
@@ -106,7 +112,7 @@
       var cr = s('text', { x: 14, y: 4, 'text-anchor': 'middle', 'class': 'd-text d-halo' }, cg); cr.textContent = 'В';
       var cs = s('text', { x: 0, y: 24, 'text-anchor': 'middle', 'class': 'd-text d-halo' }, cg); cs.textContent = 'Ю';
     }
-    svg.setAttribute('aria-label', 'Схема. Север вверху, восток справа. ' + desc.join('; '));
+    svg.setAttribute('aria-label', 'Схема. ' + (d.compass ? 'Север вверху, восток справа. ' : '') + desc.join('; '));
     return { svg: svg, zones: zones };
   }
 
@@ -134,6 +140,7 @@
         h('span', { 'class': 'tag', text: sector.name }),
         h('span', { 'class': 'tag tag-type', text: TYPE_LABEL[task.type] }),
         h('span', { 'class': 'tag', text: TOPIC_LABEL[task.topic] || 'География' }),
+        task.fgos ? h('span', { 'class': 'tag tag-fgos', title: 'Проверяемый результат по ФГОС ООО', text: 'ФГОС ' + task.fgos }) : null,
         h('span', { 'class': 'tag tag-pts', text: task.extra ? 'Дополнительное' : (task.complex ? 'Комплексное' : 'Обычное') + '' })
       ]);
       root.appendChild(meta);

@@ -294,3 +294,31 @@ p { margin: 0 0 .8em; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 body.no-anim *, body.no-anim *::before, body.no-anim *::after { animation: none !important; transition: none !important; }
+
+/* ---------- Главы ---------- */
+.chapter-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.chapter-tab {
+  font: inherit; color: var(--text); background: transparent; border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 4px 12px; min-height: 44px; cursor: pointer; text-align: left; display: flex; flex-direction: column; line-height: 1.15;
+}
+.chapter-tab:hover:not(:disabled) { border-color: var(--teal); background: #183450; }
+.chapter-tab.active { background: var(--panel2); border-color: var(--teal); box-shadow: inset 0 -3px 0 var(--teal); }
+.chapter-tab:disabled { opacity: .55; cursor: not-allowed; }
+.chapter-tab-title { font-weight: 700; font-size: 14px; }
+.chapter-tab-sub { font-size: 12px; color: var(--muted); }
+.tag-fgos { color: var(--muted); border-style: dashed; }
+.d-line { fill: none; stroke: var(--c, #e8f1f5); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.d-temp { --c: #ff9a76; } .d-prec { --c: #5db7e8; } .d-axis { --c: #8fa8b8; }
+.d-small { font-size: 9px; }
+.d-sand { --c: #a58a4d; } .d-tundra { --c: #6f8a85; } .d-taiga { --c: #2c5e4c; } .d-steppe { --c: #8a8f4c; }
+.d-eq { --c: #1f7a46; } .d-sav { --c: #9c9440; } .d-cold { --c: #5d89a8; } .d-warm { --c: #b0654d; }
+.d-bar { --c: #5db7e8; } .d-bar2 { --c: #e0a05a; } .d-card { --c: #2a4a63; } .d-city { --c: #7b6f8f; } .d-farm { --c: #7a8f3f; } .d-park { --c: #2f7a55; }
+.backdrop polygon { fill: #0f2a40; stroke: #1c4262; stroke-width: 1.5; }
+.sector[data-type="shell"] { --tint: #a9d3a1; } .sector[data-type="litho"] { --tint: #d9a08a; }
+.sector[data-type="atmo"] { --tint: #bcd6ea; } .sector[data-type="climate"] { --tint: #e6d49a; }
+.sector[data-type="ocean_world"] { --tint: #8fc3dc; } .sector[data-type="population"] { --tint: #d3b0c8; }
+.sector[data-type="peoples"] { --tint: #e0bf8e; } .sector[data-type="africa"] { --tint: #d9c27c; }
+.sector[data-type="samerica"] { --tint: #7fbf8a; } .sector[data-type="australia"] { --tint: #e0a77a; }
+.sector[data-type="antarctica"] { --tint: #e8f2f7; } .sector[data-type="namerica"] { --tint: #a9c7a2; }
+.sector[data-type="eurasia"] { --tint: #b7b9d9; } .sector[data-type="society"] { --tint: #9fd6c4; }
+@media (max-width: 900px) { .chapter-tabs { width: 100%; } .chapter-tab { flex: 1; } }

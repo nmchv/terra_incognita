@@ -19,6 +19,9 @@ URL = f"http://127.0.0.1:{PORT}/index.html"
 
 tasks = {t["id"]: t for t in json.load(open(os.path.join(ROOT, "data/tasks.json"), encoding="utf-8"))}
 sectors = json.load(open(os.path.join(ROOT, "data/sectors.json"), encoding="utf-8"))
+ch2 = json.load(open(os.path.join(ROOT, "data/chapter2.json"), encoding="utf-8"))
+ch1_tasks = dict(tasks)                      # задания главы 1
+tasks.update({t["id"]: t for t in ch2["tasks"]})  # для solve() нужны и задания главы 2
 failures = []
 def check(cond, msg):
     print(("  ok   " if cond else "  FAIL ") + msg)
@@ -81,7 +84,7 @@ with sync_playwright() as p:
     order = []
     while guard < 200:
         guard += 1
-        s = page.evaluate("""() => { const G=TI.Game; for (const sec of G.data.sectors) { if (G.isDiscovered(sec.id)) { const n=G.nextTask(sec.id); if (n) return {sector: sec.id, task: n.id}; } } return null; }""")
+        s = page.evaluate("""() => { const G=TI.Game; for (const sec of G.data.sectors) { if (G.chapterOf(sec) === 1 && G.isDiscovered(sec.id)) { const n=G.nextTask(sec.id); if (n) return {sector: sec.id, task: n.id}; } } return null; }""")
         if not s: break
         page.evaluate(f"document.querySelector('.sector[data-id={s['sector']}]').dispatchEvent(new MouseEvent('click',{{bubbles:true}}))")
         page.click("#sector-body >> text=/Начать исследование|Продолжить исследование/")
@@ -104,10 +107,11 @@ with sync_playwright() as p:
             page.click(".modal-wide >> text=Вернуться к карте")
         if len(order) == 15:
             page.screenshot(path=f"{SHOTS}/06-mid-map.png")
-    stt = page.evaluate("TI.Game.stats()")
+    stt = page.evaluate("TI.Game.stats(1)")
     check(stt["explored"] == 12, "исследованы все 12 секторов")
     check(stt["tasks"] == 48 and stt["full"] == 12, "выполнено 48 заданий, все секторы изучены полностью")
-    expected = sum(150 if (t["complex"] and not t["extra"]) else (50 if t["extra"] else 100) for t in tasks.values())
+    pts = lambda ts: sum(150 if (t["complex"] and not t["extra"]) else (50 if t["extra"] else 100) for t in ts)
+    expected = pts(ch1_tasks.values())
     check(stt["points"] == expected, f"очки {stt['points']} = ожидаемым {expected}")
     check(stt["discoveries"] == 12, "найдено 12 открытий")
     ach = page.evaluate("TI.Game.getState().progress.achievementIds")
@@ -159,6 +163,53 @@ with sync_playwright() as p:
     page.click(".modal-small >> button:has-text(\"Загрузить\")")
     page.wait_for_selector("#screen-game:not([hidden])")
     check(page.evaluate("TI.Game.stats().points") == expected, "импорт восстановил прогресс")
+
+    # --- глава 2 (7 класс): вкладка, вступление, прохождение, финал ---
+    check(page.is_visible("#chapter-tabs"), "вкладки глав видны")
+    page.click("#chapter-tabs button:has-text('Глава 2')")
+    page.wait_for_selector(".modal-wide")
+    check(page.is_visible("text=Проверка на Земле"), "при первом входе в главу 2 показано вступление")
+    page.screenshot(path=f"{SHOTS}/20-ch2-intro.png")
+    page.click(".modal-wide >> text=Начать главу 2")
+    st2 = page.evaluate("Array.from(document.querySelectorAll('.sector')).map(g=>g.dataset.status)")
+    check(len(st2) == 14 and st2.count("hidden") == 13 and st2.count("discovered") == 1, "глава 2: 14 секторов, открыт только стартовый (%s)" % st2)
+    check("Географическая оболочка" in page.inner_text("#sector-title"), "в главе 2 выбран её стартовый сектор")
+    page.screenshot(path=f"{SHOTS}/21-ch2-start-map.png")
+    check(page.evaluate("TI.Game.stats(1).explored") == 12, "прогресс главы 1 не затронут переходом")
+    guard = 0
+    while guard < 200:
+        guard += 1
+        s2 = page.evaluate("""() => { const G=TI.Game; for (const sec of G.data.sectors) { if (G.chapterOf(sec) === 2 && G.isDiscovered(sec.id)) { const n=G.nextTask(sec.id); if (n) return {sector: sec.id, task: n.id}; } } return null; }""")
+        if not s2: break
+        page.evaluate(f"document.querySelector('.sector[data-id={s2['sector']}]').dispatchEvent(new MouseEvent('click',{{bubbles:true}}))")
+        page.click("#sector-body >> text=/Начать исследование|Продолжить исследование/")
+        solve(page, s2["task"], correct=True)
+        try:
+            page.wait_for_selector(".result-ok", timeout=5000)
+            page.click(".modal-task >> text=Продолжить исследование", timeout=5000)
+        except Exception:
+            page.screenshot(path=f"{SHOTS}/fail-ch2.png"); print("FAILED CH2 TASK", s2["task"], tasks[s2["task"]]["type"]); raise
+        if page.evaluate("TI.Game.allExplored(2)"):
+            page.wait_for_timeout(450)
+        if page.is_visible("text=Земля исследована"):
+            page.screenshot(path=f"{SHOTS}/22-ch2-finale.png")
+            page.click(".modal-wide >> text=Вернуться к карте")
+    t2 = page.evaluate("TI.Game.stats(2)")
+    check(t2["explored"] == 14 and t2["tasks"] == 56 and t2["full"] == 14, "глава 2: 14 секторов, 56 заданий, все изучены полностью (%s)" % t2)
+    check(t2["discoveries"] == 14, "глава 2: найдено 14 открытий")
+    ach2 = page.evaluate("TI.Game.getState().progress.achievementIds.filter(a => a.indexOf('c2-') === 0)")
+    check(len(ach2) == 8, "глава 2: получены все 8 достижений: %s" % ach2)
+    expected2 = expected + pts(ch2["tasks"])
+    check(page.evaluate("TI.Game.stats().points") == expected2, "очки после двух глав = %s" % expected2)
+    check(page.evaluate("TI.Game.finaleShown(2)") and page.evaluate("TI.Game.finaleShown(1)"), "финалы обеих глав отмечены")
+    page.screenshot(path=f"{SHOTS}/23-ch2-complete-map.png")
+    page.click("#chapter-tabs button:has-text('Глава 1')")
+    check(page.evaluate("document.querySelectorAll('.sector').length") == 12, "переключение обратно на главу 1 показывает 12 секторов")
+    page.reload(); page.wait_for_selector("#screen-start:not([hidden])")
+    page.click("#btn-continue")
+    check(page.evaluate("TI.Game.getChapter()") == 1 and page.evaluate("TI.Game.stats(2).tasks") == 56, "после перезагрузки сохранены текущая глава и прогресс главы 2")
+    page.click("#chapter-tabs button:has-text('Глава 2')")
+    check(not page.is_visible(".modal-wide"), "вступление главы 2 повторно не показывается")
 
     # --- повреждённое сохранение ---
     page.evaluate("localStorage.setItem('terraIncognitaSave', '{broken')")

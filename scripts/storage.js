@@ -36,7 +36,10 @@
         achievementIds: [],
         researchPoints: 0,
         introSeen: false,
-        finaleShown: false
+        finaleShown: false,
+        chapter: 1,
+        introChapters: [],
+        finaleChapters: []
       },
       journal: [],
       settings: { soundEnabled: false, animationsEnabled: !prefersReducedMotion() }
@@ -99,7 +102,10 @@
         achievementIds: uniq(obj.progress.achievementIds),
         researchPoints: Math.round(obj.progress.researchPoints),
         introSeen: !!obj.progress.introSeen,
-        finaleShown: !!obj.progress.finaleShown
+        finaleShown: !!obj.progress.finaleShown,
+        chapter: typeof obj.progress.chapter === 'number' && obj.progress.chapter >= 1 ? Math.floor(obj.progress.chapter) : 1,
+        introChapters: numList(obj.progress.introChapters),
+        finaleChapters: numList(obj.progress.finaleChapters)
       },
       journal: obj.journal.slice(-30).map(function (e) {
         return { t: typeof e.t === 'string' ? e.t : base.createdAt, text: e.text, kind: typeof e.kind === 'string' ? e.kind : 'info' };
@@ -112,6 +118,8 @@
     return s;
   }
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
+  /** Необязательный список номеров глав (в старых сохранениях его нет). */
+  function numList(a) { return isArr(a) ? uniq(a.filter(function (x) { return typeof x === 'number' && isFinite(x); })) : []; }
 
   /** Загрузка при запуске. status: 'none' | 'ok' | 'corrupt'. */
   function load(ids) {

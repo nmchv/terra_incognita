@@ -52,9 +52,21 @@
       if (!x.name || !x.short || !x.long) err('Открытие ' + x.id + ': не хватает текста.');
     });
     // достижимость: сектор достижим, если достижимы все его условия
-    var start = d.world.planet.startSector;
-    if (sIds.indexOf(start) === -1) err('Стартовый сектор не найден.');
-    var reach = {}; reach[start] = true;
+    var chapters = d.world.chapters || [];
+    var starts = [d.world.planet.startSector];
+    chapters.forEach(function (c) {
+      if (starts.indexOf(c.startSector) === -1) starts.push(c.startSector);
+      if (sIds.indexOf(c.startSector) === -1) err('Глава ' + c.id + ': стартовый сектор ' + c.startSector + ' не найден.');
+    });
+    var chIds = chapters.map(function (c) { return c.id; });
+    d.sectors.forEach(function (s) {
+      if (chIds.length && chIds.indexOf(s.chapter || 1) === -1) err('Сектор ' + s.id + ': неизвестная глава ' + s.chapter + '.');
+    });
+    d.world.achievements.forEach(function (a) {
+      if (chIds.length && chIds.indexOf(a.chapter || 1) === -1) err('Достижение ' + a.id + ': неизвестная глава ' + a.chapter + '.');
+    });
+    var reach = {};
+    starts.forEach(function (st) { if (sIds.indexOf(st) === -1) err('Стартовый сектор не найден: ' + st + '.'); reach[st] = true; });
     var changed = true;
     while (changed) {
       changed = false;
@@ -94,7 +106,6 @@
     state = s;
     // стартовый сектор всегда обнаружен; пересчитываем зависимости (на случай импорта)
     var p = state.progress;
-    if (p.discoveredSectors.indexOf(data.world.planet.startSector) === -1) p.discoveredSectors.push(data.world.planet.startSector);
     recomputeDiscovered();
     // фиксируем «полностью изученные» по фактическим заданиям
     data.sectors.forEach(function (sec) {
@@ -138,8 +149,40 @@
     return 'discovered';
   }
 
+  function chapterOf(s) { return s.chapter || 1; }
+  function chapterList() {
+    var l = (data.world.chapters || []).slice();
+    if (!l.length) l = [{ id: 1, startSector: data.world.planet.startSector }];
+    return l;
+  }
+  /** Данные главы; для главы 1 недостающие поля берутся из world.json. */
+  function chapterInfo(n) {
+    var c = chapterList().filter(function (x) { return x.id === n; })[0] || chapterList()[0];
+    var w = data.world, o = {};
+    for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k)) o[k] = c[k];
+    if (o.id === 1) {
+      o.title = o.title || 'Глава 1. Планета X-01';
+      o.mission = o.mission || w.mission; o.intro = o.intro || w.intro; o.knownFacts = o.knownFacts || w.knownFacts;
+      o.map = o.map || { mapWidth: w.planet.mapWidth, mapHeight: w.planet.mapHeight, caption: w.planet.title + ' · схема дистанционного сканирования', oceanLabel: 'ОКЕАН', ariaLabel: 'Карта планеты X-01', compass: [930, 70] };
+    }
+    return o;
+  }
+  function sectorsOf(n) { return data.sectors.filter(function (s) { return chapterOf(s) === n; }); }
+  function chapterExplored(n) {
+    var l = sectorsOf(n);
+    return l.length > 0 && l.every(function (s) { return isExplored(s.id); });
+  }
+  /** Стартовый сектор главы доступен сразу, если у главы нет условия requiresChapter. */
+  function chapterUnlocked(n) {
+    var c = chapterInfo(n);
+    return !c.requiresChapter || chapterExplored(c.requiresChapter);
+  }
+
   function recomputeDiscovered() {
     var out = [], changed = true;
+    chapterList().forEach(function (c) {
+      if (chapterUnlocked(c.id) && !isDiscovered(c.startSector)) { state.progress.discoveredSectors.push(c.startSector); out.push(c.startSector); }
+    });
     while (changed) {
       changed = false;
       data.sectors.forEach(function (s) {
@@ -161,18 +204,22 @@
     return tpl.replace(/\{(\w+)\}/g, function (m, k) { return vars[k] != null ? vars[k] : m; });
   }
 
-  function stats() {
+  /** Статистика: по одной главе (n) или по всей игре (без аргумента). Очки общие. */
+  function stats(n) {
     var p = state.progress;
-    var explored = data.sectors.filter(function (s) { return isExplored(s.id); }).length;
+    var secs = n ? sectorsOf(n) : data.sectors;
+    var inCh = function (id) { return !!idx.sectors[id] && (!n || chapterOf(idx.sectors[id]) === n); };
+    var dIds = {};
+    secs.forEach(function (s) { (s.discoveries || []).forEach(function (d) { dIds[d] = true; }); });
     return {
-      explored: explored,
-      total: data.sectors.length,
-      tasks: p.completedTasks.length,
-      totalTasks: data.tasks.length,
+      explored: secs.filter(function (s) { return isExplored(s.id); }).length,
+      total: secs.length,
+      tasks: p.completedTasks.filter(function (t) { return idx.tasks[t] && inCh(idx.tasks[t].sectorId); }).length,
+      totalTasks: data.tasks.filter(function (t) { return inCh(t.sectorId); }).length,
       points: p.researchPoints,
-      discoveries: p.discoveryIds.length,
-      totalDiscoveries: data.discoveries.length,
-      full: data.sectors.filter(function (s) { return has(p.fullyExploredSectors, s.id); }).length
+      discoveries: p.discoveryIds.filter(function (d) { return !n || dIds[d]; }).length,
+      totalDiscoveries: n ? Object.keys(dIds).length : data.discoveries.length,
+      full: secs.filter(function (s) { return has(p.fullyExploredSectors, s.id); }).length
     };
   }
 
@@ -180,8 +227,8 @@
     return state.progress.completedTasks.filter(function (id) { return idx.tasks[id] && idx.tasks[id].topic === topic; }).length;
   }
 
-  function conditionMet(c) {
-    var st = stats();
+  function conditionMet(c, ch) {
+    var st = stats(ch || 1);
     switch (c.type) {
       case 'sectorExplored': return isExplored(c.sector);
       case 'exploredCount': return st.explored >= c.n;
@@ -248,7 +295,7 @@
     }
     // достижения (цикл на случай цепочки)
     data.world.achievements.forEach(function (a) {
-      if (!has(p.achievementIds, a.id) && conditionMet(a.condition)) {
+      if (!has(p.achievementIds, a.id) && conditionMet(a.condition, a.chapter || 1)) {
         p.achievementIds.push(a.id); res.newAchievements.push(a.id);
         addJournal('achievement', fmt(ev.achievement, { name: a.name }));
       }
@@ -272,7 +319,15 @@
     return null;
   }
 
-  function allExplored() { return stats().explored === data.sectors.length; }
+  function allExplored(n) { var st = stats(n || 1); return st.total > 0 && st.explored === st.total; }
+
+  /* Вступление и финал: для главы 1 используются прежние поля, для остальных — списки номеров глав. */
+  function introSeen(n) { var p = state.progress; return n === 1 ? !!p.introSeen : has(p.introChapters, n); }
+  function markIntro(n) { var p = state.progress; if (n === 1) p.introSeen = true; else if (!has(p.introChapters, n)) p.introChapters.push(n); }
+  function finaleShown(n) { var p = state.progress; return n === 1 ? !!p.finaleShown : has(p.finaleChapters, n); }
+  function markFinale(n) { var p = state.progress; if (n === 1) p.finaleShown = true; else if (!has(p.finaleChapters, n)) p.finaleChapters.push(n); }
+  function getChapter() { var c = state.progress.chapter; return chapterList().some(function (x) { return x.id === c; }) ? c : 1; }
+  function setChapter(n) { state.progress.chapter = n; }
 
   TI.Game = {
     validateData: validateData, init: init, ids: ids,
@@ -286,6 +341,10 @@
     isExplored: isExplored, isDiscovered: isDiscovered, sectorStatus: sectorStatus,
     stats: stats, checkAnswer: checkAnswer, completeTask: completeTask, taskReward: taskReward,
     canStartTask: canStartTask, nextTask: nextTask, markIntroSeen: markIntroSeen,
-    addJournal: addJournal, allExplored: allExplored
+    addJournal: addJournal, allExplored: allExplored,
+    chapters: chapterList, chapter: chapterInfo, sectorsOf: sectorsOf, chapterOf: chapterOf,
+    chapterExplored: chapterExplored, chapterUnlocked: chapterUnlocked,
+    introSeen: introSeen, markIntro: markIntro, finaleShown: finaleShown, markFinale: markFinale,
+    getChapter: getChapter, setChapter: setChapter
   };
 })(window.TI = window.TI || {});
