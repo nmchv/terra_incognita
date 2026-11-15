@@ -3,7 +3,6 @@
   'use strict';
   var h = TI.UI.h, G = TI.Game, S = TI.Storage;
   var FILES = ['world', 'sectors', 'tasks', 'discoveries', 'events'];
-  var CHAPTER_FILES = ['chapter2']; // необязательные файлы с дополнительными главами
   var mapChapter = null;            // глава, для которой сейчас построена карта
   var started = false;      // начата ли игра (есть что сохранять)
   var selectedId = null;
@@ -23,6 +22,7 @@
     extras.forEach(function (x) {
       if (!x || !x.chapter) return;
       d.world.chapters = (d.world.chapters || []).concat([x.chapter]);
+      d.world.topics = Object.assign({}, d.world.topics || {}, x.chapter.topics || {});
       d.sectors = d.sectors.concat(x.sectors || []);
       d.tasks = d.tasks.concat(x.tasks || []);
       d.discoveries = d.discoveries.concat(x.discoveries || []);
@@ -30,10 +30,21 @@
     });
     return d;
   }
+  /** Запуск с диска: данные глав подключаются скриптами scripts/bundles/<глава>.js (по одному на главу). */
+  function loadScript(src) {
+    return new Promise(function (resolve) {
+      var s = document.createElement('script');
+      s.src = src; s.onload = function () { resolve(true); }; s.onerror = function () { resolve(false); };
+      document.head.appendChild(s);
+    });
+  }
   function fromBundle(b) {
     var d = JSON.parse(JSON.stringify(b)); // копия: слияние не должно менять исходный пакет
-    var extras = CHAPTER_FILES.map(function (f) { var x = d[f]; delete d[f]; return x; });
-    return mergeChapters(d, extras);
+    var names = d.chapters || []; delete d.chapters;
+    return Promise.all(names.map(function (n) { return loadScript('scripts/bundles/' + n + '.js'); })).then(function () {
+      var store = window.TI_CHAPTER_DATA || {};
+      return mergeChapters(d, names.map(function (n) { return store[n] ? JSON.parse(JSON.stringify(store[n])) : null; }));
+    });
   }
 
   function loadData() {
@@ -44,10 +55,11 @@
       });
     })).then(function (arr) {
       var d = {}; FILES.forEach(function (f, i) { d[f] = arr[i]; });
-      // дополнительные главы: если файла нет, игра работает с тем, что есть
-      return Promise.all(CHAPTER_FILES.map(function (f) {
-        return fetch('data/' + f + '.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; });
-      })).then(function (extras) { return mergeChapters(d, extras); });
+      // дополнительные главы перечислены в data/chapters.json; если главы или реестра нет, игра работает с тем, что есть
+      var getJson = function (f) { return fetch('data/' + f + '.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); };
+      return getJson('chapters').then(function (names) {
+        return Promise.all((Array.isArray(names) ? names : []).map(getJson));
+      }).then(function (extras) { return mergeChapters(d, extras); });
     }).catch(function (e) {
       // запуск с диска (file://): fetch недоступен, используем встроенную копию тех же данных
       if (window.TI_BUNDLE) { console.info('[TERRA INCOGNITA] fetch недоступен, используется data-bundle.js:', e && e.message); return fromBundle(window.TI_BUNDLE); }

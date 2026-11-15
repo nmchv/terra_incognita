@@ -8,11 +8,12 @@
     analysis: 'Географический анализ',
     map_click: 'Задание на карте'
   };
-  var TOPIC_LABEL = {
-    orientation: 'Ориентирование', relief: 'Рельеф', climate: 'Климат', water: 'Воды',
-    shell: 'Закономерности природы', litho: 'Литосфера', atmo: 'Атмосфера', ocean: 'Мировой океан',
-    climates: 'Климаты Земли', population: 'Население', peoples: 'Страны и народы', continents: 'Материки и страны', society: 'Природа и общество'
-  };
+  var TOPIC_LABEL = { orientation: 'Ориентирование', relief: 'Рельеф', climate: 'Климат', water: 'Воды' };
+  /** Подписи тем глав задаются в самой главе (chapter.topics), поэтому новую главу можно добавить без правки этого файла. */
+  function topicLabel(t) {
+    var extra = (TI.Game && TI.Game.data && TI.Game.data.world.topics) || {};
+    return extra[t] || TOPIC_LABEL[t] || 'География';
+  }
 
   function h(tag, attrs, children) {
     var e = document.createElement(tag);
@@ -139,7 +140,7 @@
       var meta = h('div', { 'class': 'task-meta' }, [
         h('span', { 'class': 'tag', text: sector.name }),
         h('span', { 'class': 'tag tag-type', text: TYPE_LABEL[task.type] }),
-        h('span', { 'class': 'tag', text: TOPIC_LABEL[task.topic] || 'География' }),
+        h('span', { 'class': 'tag', text: topicLabel(task.topic) }),
         task.fgos ? h('span', { 'class': 'tag tag-fgos', title: 'Проверяемый результат по ФГОС ООО', text: 'ФГОС ' + task.fgos }) : null,
         h('span', { 'class': 'tag tag-pts', text: task.extra ? 'Дополнительное' : (task.complex ? 'Комплексное' : 'Обычное') + '' })
       ]);

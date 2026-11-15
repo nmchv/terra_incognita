@@ -314,11 +314,4 @@ body.no-anim *, body.no-anim *::before, body.no-anim *::after { animation: none 
 .d-eq { --c: #1f7a46; } .d-sav { --c: #9c9440; } .d-cold { --c: #5d89a8; } .d-warm { --c: #b0654d; }
 .d-bar { --c: #5db7e8; } .d-bar2 { --c: #e0a05a; } .d-card { --c: #2a4a63; } .d-city { --c: #7b6f8f; } .d-farm { --c: #7a8f3f; } .d-park { --c: #2f7a55; }
 .backdrop polygon { fill: #0f2a40; stroke: #1c4262; stroke-width: 1.5; }
-.sector[data-type="shell"] { --tint: #a9d3a1; } .sector[data-type="litho"] { --tint: #d9a08a; }
-.sector[data-type="atmo"] { --tint: #bcd6ea; } .sector[data-type="climate"] { --tint: #e6d49a; }
-.sector[data-type="ocean_world"] { --tint: #8fc3dc; } .sector[data-type="population"] { --tint: #d3b0c8; }
-.sector[data-type="peoples"] { --tint: #e0bf8e; } .sector[data-type="africa"] { --tint: #d9c27c; }
-.sector[data-type="samerica"] { --tint: #7fbf8a; } .sector[data-type="australia"] { --tint: #e0a77a; }
-.sector[data-type="antarctica"] { --tint: #e8f2f7; } .sector[data-type="namerica"] { --tint: #a9c7a2; }
-.sector[data-type="eurasia"] { --tint: #b7b9d9; } .sector[data-type="society"] { --tint: #9fd6c4; }
 @media (max-width: 900px) { .chapter-tabs { width: 100%; } .chapter-tab { flex: 1; } }
