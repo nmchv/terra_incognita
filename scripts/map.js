@@ -85,6 +85,7 @@
     labelLayer = el('g', { 'class': 'labels', 'aria-hidden': 'true' }, svg);
     sectors.forEach(function (s) {
       var g = el('g', { 'class': 'sector', 'data-id': s.id, 'data-type': s.type }, svg);
+      if (s.tint) g.style.setProperty('--tint', s.tint); // цвет задаёт глава (поле tint), общий CSS не меняется
       var poly = el('polygon', { points: s.poly, 'class': 'sector-shape' }, g);
       var tl = el('title', null, g);
       var badge = el('g', { 'class': 'badge', transform: 'translate(' + s.center[0] + ' ' + (s.center[1] - 14) + ')' }, labelLayer);
