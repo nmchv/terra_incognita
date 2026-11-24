@@ -115,6 +115,8 @@
     data.sectors.forEach(function (sec) {
       if (isExplored(sec.id)) (sec.discoveries || []).forEach(function (d) { if (p.discoveryIds.indexOf(d) === -1) p.discoveryIds.push(d); });
     });
+    // значки, заслуженные до обновления игры (или в импортированном файле), выдаём молча
+    awardMedals();
   }
   function getState() { return state; }
 
@@ -219,8 +221,81 @@
       points: p.researchPoints,
       discoveries: p.discoveryIds.filter(function (d) { return !n || dIds[d]; }).length,
       totalDiscoveries: n ? Object.keys(dIds).length : data.discoveries.length,
-      full: secs.filter(function (s) { return has(p.fullyExploredSectors, s.id); }).length
+      full: secs.filter(function (s) { return has(p.fullyExploredSectors, s.id); }).length,
+      stars: p.completedTasks.filter(function (t) { return idx.tasks[t] && inCh(idx.tasks[t].sectorId); }).reduce(function (a, t) { return a + starsOf(t); }, 0),
+      maxStars: data.tasks.filter(function (t) { return inCh(t.sectorId); }).length * 3
     };
+  }
+
+  /* ---------- Игровая оболочка: уровни, звёзды, серии, значки ---------- */
+  /** Ранги растут вместе с исследовательскими очками. Всего в игре 15 900 очков. */
+  var LEVELS = [
+    { n: 1, name: 'Юнга', icon: '🐣', min: 0 },
+    { n: 2, name: 'Следопыт', icon: '🥾', min: 200 },
+    { n: 3, name: 'Разведчик', icon: '🔭', min: 500 },
+    { n: 4, name: 'Путешественник', icon: '🧳', min: 900 },
+    { n: 5, name: 'Картограф', icon: '🗺️', min: 1400 },
+    { n: 6, name: 'Штурман', icon: '🧭', min: 2000 },
+    { n: 7, name: 'Капитан', icon: '⚓', min: 2800 },
+    { n: 8, name: 'Командор', icon: '🚀', min: 3800 },
+    { n: 9, name: 'Адмирал', icon: '🛰️', min: 5000 },
+    { n: 10, name: 'Магистр географии', icon: '🎓', min: 6500 },
+    { n: 11, name: 'Хранитель Земли', icon: '🌍', min: 9000 },
+    { n: 12, name: 'Легенда экспедиций', icon: '👑', min: 12500 }
+  ];
+  function levelInfo(points) {
+    var cur = LEVELS[0];
+    LEVELS.forEach(function (l) { if (points >= l.min) cur = l; });
+    var next = LEVELS[cur.n] || null; // номера идут с 1, поэтому LEVELS[n] — следующий ранг
+    return {
+      n: cur.n, name: cur.name, icon: cur.icon, min: cur.min,
+      next: next, toNext: next ? next.min - points : 0,
+      pct: next ? Math.round((points - cur.min) / (next.min - cur.min) * 100) : 100
+    };
+  }
+  function level() { return levelInfo(state.progress.researchPoints); }
+
+  /** Звёзды за задание: 3 — с первой попытки без подсказки, 2 — с подсказкой или одной ошибкой, 1 — остальное. */
+  function starsOf(taskId) {
+    if (!isDone(taskId)) return 0;
+    return state.progress.taskStars[taskId] || 1;
+  }
+  function totalStars() { return state.progress.completedTasks.reduce(function (a, id) { return a + starsOf(id); }, 0); }
+  function perfectCount() { return state.progress.completedTasks.filter(function (id) { return starsOf(id) === 3; }).length; }
+
+  /** Значки за игровые успехи (не зависят от глав). Считаются по сохранению, поэтому старые сохранения их тоже получают. */
+  var MEDALS = [
+    { id: 'm-first', icon: '🥾', name: 'Первый шаг', desc: 'Выполни первое задание.', ok: function (p) { return p.completedTasks.length >= 1; } },
+    { id: 'm-ten', icon: '🔟', name: 'Десяточка', desc: 'Выполни 10 заданий.', ok: function (p) { return p.completedTasks.length >= 10; } },
+    { id: 'm-fifty', icon: '🏅', name: 'Полсотни', desc: 'Выполни 50 заданий.', ok: function (p) { return p.completedTasks.length >= 50; } },
+    { id: 'm-streak3', icon: '🔥', name: 'Горячая серия', desc: '3 верных ответа подряд.', ok: function (p) { return p.bestStreak >= 3; } },
+    { id: 'm-streak7', icon: '⚡', name: 'Неудержимый', desc: '7 верных ответов подряд.', ok: function (p) { return p.bestStreak >= 7; } },
+    { id: 'm-streak15', icon: '🌋', name: 'Извержение знаний', desc: '15 верных ответов подряд.', ok: function (p) { return p.bestStreak >= 15; } },
+    { id: 'm-stars10', icon: '⭐', name: 'Звёздочёт', desc: 'Собери 10 звёзд.', ok: function () { return totalStars() >= 10; } },
+    { id: 'm-stars50', icon: '🌟', name: 'Звёздное небо', desc: 'Собери 50 звёзд.', ok: function () { return totalStars() >= 50; } },
+    { id: 'm-perfect5', icon: '🧠', name: 'Умник', desc: 'Пять заданий на три звезды.', ok: function () { return perfectCount() >= 5; } },
+    { id: 'm-lvl5', icon: '🎖️', name: 'Бывалый', desc: 'Достигни 5 уровня.', ok: function (p) { return levelInfo(p.researchPoints).n >= 5; } },
+    { id: 'm-chapter', icon: '🌍', name: 'Покоритель глав', desc: 'Исследуй все территории любой главы.', ok: function () { return chapterList().some(function (c) { return chapterExplored(c.id); }); } }
+  ];
+  /** Выдаёт заслуженные, но ещё не полученные значки; возвращает их id. */
+  function awardMedals() {
+    var p = state.progress, got = [];
+    MEDALS.forEach(function (m) {
+      if (!has(p.medalIds, m.id) && m.ok(p)) { p.medalIds.push(m.id); got.push(m.id); }
+    });
+    return got;
+  }
+  function medals() {
+    return MEDALS.map(function (m) { return { id: m.id, icon: m.icon, name: m.name, desc: m.desc, got: has(state.progress.medalIds, m.id) }; });
+  }
+  function medal(id) { return medals().filter(function (m) { return m.id === id; })[0]; }
+
+  /** Учитывает ответ: серия растёт при верном ответе и обнуляется при ошибке. */
+  function registerAnswer(ok) {
+    var p = state.progress;
+    if (ok) { p.streak += 1; if (p.streak > p.bestStreak) p.bestStreak = p.streak; }
+    else { p.streak = 0; p.mistakes += 1; }
+    return { streak: p.streak, best: p.bestStreak };
   }
 
   function topicCount(topic) {
@@ -262,17 +337,29 @@
    * Засчитывает успешное решение. Повторное решение не даёт очков.
    * Возвращает описание последствий для интерфейса.
    */
-  function completeTask(taskId) {
+  function completeTask(taskId, opts) {
     var t = idx.tasks[taskId];
     var p = state.progress;
-    var res = { taskId: taskId, repeat: false, points: 0, newSectors: [], explored: false, full: false, newDiscoveries: [], newAchievements: [], entries: [] };
+    var stars = opts && (opts.stars === 2 || opts.stars === 3) ? opts.stars : 1;
+    var res = { taskId: taskId, repeat: false, points: 0, stars: stars, starsUp: false, levelUp: null, newMedals: [], newSectors: [], explored: false, full: false, newDiscoveries: [], newAchievements: [], entries: [] };
     if (!t) return res;
-    if (isDone(taskId)) { res.repeat = true; return res; }
+    if (isDone(taskId)) {
+      // повторное решение очков не даёт, но можно улучшить оценку
+      res.repeat = true;
+      if (stars > starsOf(taskId)) { p.taskStars[taskId] = stars; res.starsUp = true; }
+      res.stars = starsOf(taskId);
+      res.newMedals = awardMedals();
+      return res;
+    }
     var sec = idx.sectors[t.sectorId];
     var wasExplored = isExplored(sec.id);
+    var levelBefore = levelInfo(p.researchPoints).n;
     p.completedTasks.push(taskId);
+    p.taskStars[taskId] = stars;
     res.points = taskReward(t);
     p.researchPoints += res.points;
+    var levelAfter = levelInfo(p.researchPoints);
+    if (levelAfter.n > levelBefore) res.levelUp = levelAfter;
     var ev = data.events, vars = { name: sec.name, title: t.title, journal: sec.journal || '' };
 
     if (!wasExplored && isExplored(sec.id)) {
@@ -301,6 +388,8 @@
       }
     });
     if (!res.explored && !res.full) addJournal('task', fmt(ev.taskDone, vars));
+    res.newMedals = awardMedals();
+    res.newMedals.forEach(function (id) { var m = medal(id); addJournal('achievement', 'Получен значок «' + m.name + '».'); });
     return res;
   }
 
@@ -341,6 +430,8 @@
     isExplored: isExplored, isDiscovered: isDiscovered, sectorStatus: sectorStatus,
     stats: stats, checkAnswer: checkAnswer, completeTask: completeTask, taskReward: taskReward,
     canStartTask: canStartTask, nextTask: nextTask, markIntroSeen: markIntroSeen,
+    LEVELS: LEVELS, levelInfo: levelInfo, level: level, starsOf: starsOf, totalStars: totalStars,
+    medals: medals, medal: medal, registerAnswer: registerAnswer,
     addJournal: addJournal, allExplored: allExplored,
     chapters: chapterList, chapter: chapterInfo, sectorsOf: sectorsOf, chapterOf: chapterOf,
     chapterExplored: chapterExplored, chapterUnlocked: chapterUnlocked,

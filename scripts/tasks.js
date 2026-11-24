@@ -15,6 +15,10 @@
     return extra[t] || TOPIC_LABEL[t] || 'География';
   }
 
+  var OK_PHRASES = ['Верно!', 'Отлично!', 'В точку!', 'Так держать!', 'Блестяще!', 'Супер!'];
+  var BAD_PHRASES = ['Пока неверно.', 'Почти получилось!', 'Не сдавайся!'];
+  function pick(list) { return list[Math.floor(Math.random() * list.length)]; }
+
   function h(tag, attrs, children) {
     var e = document.createElement(tag);
     if (attrs) for (var k in attrs) if (Object.prototype.hasOwnProperty.call(attrs, k)) {
@@ -62,7 +66,7 @@
     var desc = [];
     var defs = s('defs', null, svg);
     var m = s('marker', { id: 'arrowhead', viewBox: '0 0 10 10', refX: '8', refY: '5', markerWidth: '7', markerHeight: '7', orient: 'auto-start-reverse' }, defs);
-    s('path', { d: 'M0 0 L10 5 L0 10 z', fill: '#e8f1f5' }, m);
+    s('path', { d: 'M0 0 L10 5 L0 10 z', fill: '#1f1a4d' }, m);
     var zones = {};
     d.items.forEach(function (it) {
       var c = 'd-' + (it.c || 'land');
@@ -117,6 +121,14 @@
     return { svg: svg, zones: zones };
   }
 
+  /** Ряд из трёх звёзд (n заполнены). Звёзды «выскакивают» по очереди. */
+  function starRow(n, big) {
+    var row = h('span', { 'class': 'stars' + (big ? ' stars-big' : ''), role: 'img', 'aria-label': n + ' из 3 звёзд' });
+    for (var i = 0; i < 3; i++) row.appendChild(h('span', { 'class': 'star' + (i < n ? ' star-on' : ''), 'aria-hidden': 'true', style: '--i:' + i, text: '★' }));
+    return row;
+  }
+  function chip(kind, text) { return h('span', { 'class': 'chip chip-' + kind, text: text }); }
+
   function shuffle(a) {
     for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
     return a;
@@ -127,7 +139,9 @@
    * handlers: { complete(task) -> result, ui: {sound(name)}, onFinish(result|null), isRepeat: bool }
    */
   function render(container, task, sector, handlers) {
-    var selected = null, hintShown = false, answered = false;
+    var selected = null, hintShown = false, answered = false, wrongCount = 0;
+    /** Звёзды: 3 — без подсказки и ошибок, 2 — одна «потеря» (подсказка или ошибка), 1 — остальное. */
+    function starsNow() { var lost = (hintShown ? 1 : 0) + wrongCount; return lost === 0 ? 3 : lost === 1 ? 2 : 1; }
     var order = null; // перемешанный порядок вариантов
     var root = h('div', { 'class': 'task' });
     container.innerHTML = '';
@@ -137,17 +151,31 @@
       root.innerHTML = '';
       selected = null; answered = false;
       var repeat = TI.Game.isDone(task.id);
+      // индикатор: сколько заданий сектора уже выполнено и какое сейчас
+      var all = TI.Game.tasksOf(sector.id, false).concat(TI.Game.tasksOf(sector.id, true));
+      var pips = h('div', { 'class': 'task-pips', role: 'img', 'aria-label': 'Задание ' + (all.map(function (t) { return t.id; }).indexOf(task.id) + 1) + ' из ' + all.length });
+      all.forEach(function (t) {
+        pips.appendChild(h('span', { 'class': 'pip' + (TI.Game.isDone(t.id) ? ' pip-done' : '') + (t.id === task.id ? ' pip-cur' : '') + (t.extra ? ' pip-extra' : ''), 'aria-hidden': 'true' }));
+      });
+      root.appendChild(pips);
       var meta = h('div', { 'class': 'task-meta' }, [
         h('span', { 'class': 'tag', text: sector.name }),
         h('span', { 'class': 'tag tag-type', text: TYPE_LABEL[task.type] }),
         h('span', { 'class': 'tag', text: topicLabel(task.topic) }),
         task.fgos ? h('span', { 'class': 'tag tag-fgos', title: 'Проверяемый результат по ФГОС ООО', text: 'ФГОС ' + task.fgos }) : null,
-        h('span', { 'class': 'tag tag-pts', text: task.extra ? 'Дополнительное' : (task.complex ? 'Комплексное' : 'Обычное') + '' })
+        h('span', { 'class': 'tag tag-pts', text: (task.extra ? 'Дополнительное' : (task.complex ? 'Комплексное' : 'Обычное')) + ' · +' + TI.Game.taskReward(task) })
       ]);
       root.appendChild(meta);
       root.appendChild(h('h2', { 'class': 'task-title', id: 'task-title', text: task.title }));
       root.appendChild(h('p', { 'class': 'task-situation', text: task.description }));
-      if (repeat) root.appendChild(h('p', { 'class': 'note', text: 'Это задание уже выполнено. Очки за повторное решение не начисляются.' }));
+      if (repeat) {
+        var had = TI.Game.starsOf(task.id);
+        root.appendChild(h('p', { 'class': 'note note-repeat' }, [
+          starRow(had), document.createTextNode(' Задание уже выполнено. Очки за повторное решение не начисляются, но можно получить больше звёзд.')
+        ]));
+      } else {
+        root.appendChild(h('p', { 'class': 'note note-stars', text: '★★★ — если ответить с первой попытки и без подсказки.' }));
+      }
 
       var zoneApi = null;
       var interactive = task.type === 'map_click';
@@ -178,7 +206,7 @@
         order.forEach(function (orig, pos) {
           var id = 'opt-' + task.id + '-' + pos;
           var inp = h('input', { type: 'radio', name: 'answer', id: id, value: String(orig) });
-          var lab = h('label', { 'class': 'option', 'for': id }, [
+          var lab = h('label', { 'class': 'option opt-' + (pos % 4), 'for': id }, [
             inp, h('span', { 'class': 'option-mark', text: String.fromCharCode(1040 + pos) }), h('span', { 'class': 'option-text', text: task.options[orig] })
           ]);
           inp.addEventListener('change', function () { selected = orig; submit.disabled = false; });
@@ -191,7 +219,7 @@
       }
 
       var hintBox = h('div', { 'class': 'hint', hidden: 'hidden', role: 'note' });
-      var hintBtn = h('button', { type: 'button', 'class': 'btn btn-ghost', text: 'Подсказка' });
+      var hintBtn = h('button', { type: 'button', 'class': 'btn btn-ghost', title: 'Подсказка стоит одной звезды', text: 'Подсказка' });
       var submit = h('button', { type: 'button', 'class': 'btn btn-primary', text: 'Ответить', disabled: 'disabled' });
       var actions = h('div', { 'class': 'task-actions' }, [hintBtn, submit]);
       root.appendChild(hintBox);
@@ -211,6 +239,7 @@
         if (selected === null || answered) return;
         answered = true;
         var ok = TI.Game.checkAnswer(task, selected);
+        if (!ok) wrongCount++;
         submit.disabled = true; hintBtn.disabled = true;
         inputs.forEach(function (o) {
           o.inp.disabled = true;
@@ -241,19 +270,32 @@
       result.innerHTML = '';
       result.className = 'result ' + (ok ? 'result-ok' : 'result-bad');
       handlers.sound(ok ? 'ok' : 'bad');
+      var prevStreak = TI.Game.getState().progress.streak;
+      var ans = handlers.answered ? handlers.answered(ok) : { streak: 0, best: 0 };
       var head = h('p', { 'class': 'result-head' }, [
+        h('span', { 'class': 'result-mascot', 'aria-hidden': 'true', text: ok ? '🥳' : '🤔' }),
         h('span', { 'class': 'result-icon', 'aria-hidden': 'true', text: ok ? '✓' : '✕' }),
-        h('span', { text: ok ? 'Верно!' : 'Пока неверно.' })
+        h('span', { text: ok ? pick(OK_PHRASES) : pick(BAD_PHRASES) })
       ]);
       result.appendChild(head);
-      if (!ok) result.appendChild(h('p', { 'class': 'result-answer' }, [h('strong', { text: 'Правильный ответ: ' }), document.createTextNode(correctText())]));
+      if (!ok) {
+        result.appendChild(h('p', { 'class': 'result-answer' }, [h('strong', { text: 'Правильный ответ: ' }), document.createTextNode(correctText())]));
+        if (prevStreak >= 2) result.appendChild(h('p', { 'class': 'result-streak-lost', text: 'Серия из ' + prevStreak + ' верных ответов прервалась. Ничего страшного: начни новую!' }));
+      }
       result.appendChild(h('p', { 'class': 'result-expl', text: task.explanation }));
 
       var res = null;
       var buttons = h('div', { 'class': 'task-actions' });
       if (ok) {
-        res = handlers.complete(task);
-        result.appendChild(rewardBlock(res));
+        res = handlers.complete(task, { stars: starsNow() });
+        result.appendChild(rewardBlock(res, ans));
+        if (TI.UI && TI.UI.confetti) TI.UI.confetti({ count: res.repeat && !res.starsUp ? 18 : 30 + res.stars * 14, x: 0.5, y: 0.3 });
+        if (res.stars === 3 && (!res.repeat || res.starsUp)) setTimeout(function () { handlers.sound('star'); }, 300);
+        if (res.levelUp && TI.UI) {
+          setTimeout(function () { handlers.sound('level'); }, 500);
+          TI.UI.banner({ icon: res.levelUp.icon, small: 'Новый уровень!', title: 'Уровень ' + res.levelUp.n, text: res.levelUp.name, kind: 'level' });
+          TI.UI.announce('Новый уровень ' + res.levelUp.n + ': ' + res.levelUp.name + '!');
+        }
         var go = h('button', { type: 'button', 'class': 'btn btn-primary', text: 'Продолжить исследование' });
         go.addEventListener('click', function () { handlers.onFinish(res); });
         buttons.appendChild(go);
@@ -270,10 +312,23 @@
       result.scrollIntoView({ block: 'nearest', behavior: 'auto' });
     }
 
-    function rewardBlock(res) {
+    function rewardBlock(res, ans) {
       var box = h('div', { 'class': 'rewards' });
-      if (res.repeat) { box.appendChild(h('p', { text: 'Повторное решение: очки не начисляются.' })); return box; }
-      box.appendChild(h('p', { 'class': 'reward-line', text: '+' + res.points + ' исследовательских очков' }));
+      box.appendChild(h('div', { 'class': 'reward-stars' }, [
+        starRow(res.stars, true),
+        h('span', { 'class': 'reward-stars-text', text: res.stars === 3 ? 'Три звезды! Без подсказок и ошибок.' : res.stars === 2 ? 'Две звезды. Хороший результат!' : 'Одна звезда. В следующий раз получится лучше!' })
+      ]));
+      var chips = h('div', { 'class': 'reward-chips' });
+      if (!res.repeat) chips.appendChild(chip('pts', '+' + res.points + ' очков'));
+      if (ans && ans.streak >= 2) chips.appendChild(chip('streak', '🔥 Серия: ' + ans.streak));
+      var lv = TI.Game.level();
+      chips.appendChild(chip('level', lv.icon + ' ' + lv.name + (lv.next ? ' · до следующего уровня ' + lv.toNext : ' · максимальный уровень')));
+      box.appendChild(chips);
+      if (res.repeat) {
+        box.appendChild(h('p', { 'class': 'reward-line', text: res.starsUp ? 'Оценка улучшена! Очки за повторное решение не начисляются.' : 'Повторное решение: очки не начисляются.' }));
+        res.newMedals.forEach(function (id) { var m = TI.Game.medal(id); box.appendChild(h('p', { 'class': 'reward-line' }, [h('strong', { text: 'Значок: ' }), document.createTextNode(m.icon + ' ' + m.name)])); });
+        return box;
+      }
       res.newDiscoveries.forEach(function (d) {
         box.appendChild(h('p', { 'class': 'reward-line' }, [h('strong', { text: 'Открытие: ' }), document.createTextNode(TI.Game.discovery(d).name)]));
       });
@@ -284,6 +339,10 @@
       });
       res.newAchievements.forEach(function (a) {
         box.appendChild(h('p', { 'class': 'reward-line' }, [h('strong', { text: 'Достижение: ' }), document.createTextNode(TI.Game.achievement(a).name)]));
+      });
+      res.newMedals.forEach(function (id) {
+        var m = TI.Game.medal(id);
+        box.appendChild(h('p', { 'class': 'reward-line' }, [h('strong', { text: 'Значок: ' }), document.createTextNode(m.icon + ' ' + m.name)]));
       });
       return box;
     }

@@ -129,7 +129,8 @@
     if (started) {
       info.hidden = false;
       var parts = G.chapters().map(function (c) { var cs = G.stats(c.id); return 'глава ' + c.id + ' — ' + cs.explored + ' из ' + cs.total; });
-      info.textContent = 'Сохранено: исследовано территорий: ' + parts.join('; ') + '. Очков — ' + st.points + '.';
+      var lv = G.level();
+      info.textContent = 'Сохранено: исследовано территорий: ' + parts.join('; ') + '. Очков — ' + st.points + ', звёзд — ' + st.stars + '. Ваш ранг: ' + lv.icon + ' ' + lv.name + ' (уровень ' + lv.n + ').';
     } else info.hidden = true;
   }
 
@@ -141,7 +142,7 @@
     var fresh = h('button', { type: 'button', 'class': 'btn btn-primary', text: 'Начать заново' });
     var imp = h('button', { type: 'button', 'class': 'btn btn-ghost', 'data-autofocus': '1', text: 'Импортировать сохранение' });
     content.appendChild(h('div', { 'class': 'task-actions' }, [imp, fresh]));
-    var m = TI.UI.modal({ title: 'Сохранение повреждено', content: content, className: 'modal-small', dismissible: false });
+    var m = TI.UI.modal({ title: 'Сохранение повреждено', icon: '⚠️', content: content, className: 'modal-small', dismissible: false });
     fresh.addEventListener('click', function () { S.clear(); pendingCorrupt = null; m.close(); openIntro(false); });
     imp.addEventListener('click', function () { m.close(); pickImportFile(function (ok) { if (ok) pendingCorrupt = null; else corruptDialog(); }); });
   }
@@ -153,7 +154,7 @@
     var go = h('button', { type: 'button', 'class': 'btn btn-primary', 'data-autofocus': '1', text: 'Начать экспедицию' });
     var later = h('button', { type: 'button', 'class': 'btn btn-ghost', text: 'Закрыть' });
     content.appendChild(h('div', { 'class': 'task-actions' }, [later, go]));
-    var m = TI.UI.modal({ title: w.title, content: content, className: 'modal-wide', dismissible: true });
+    var m = TI.UI.modal({ title: w.title, icon: '🚀', content: content, className: 'modal-wide', dismissible: true });
     go.addEventListener('click', function () { m.close(); beginGame(); });
     later.addEventListener('click', m.close);
   }
@@ -203,7 +204,7 @@
     box.hidden = list.length < 2;
     list.forEach(function (c) {
       var info = G.chapter(c.id), open = G.chapterUnlocked(c.id), st = G.stats(c.id);
-      var b = h('button', { type: 'button', 'class': 'chapter-tab' + (c.id === cur ? ' active' : ''), 'aria-pressed': c.id === cur ? 'true' : 'false',
+      var b = h('button', { type: 'button', 'data-ch': String(c.id), 'class': 'chapter-tab' + (c.id === cur ? ' active' : ''), 'aria-pressed': c.id === cur ? 'true' : 'false',
         'aria-label': info.title + (info.grade ? ', ' + info.grade : '') + '. Исследовано ' + st.explored + ' из ' + st.total + (open ? '.' : '. Откроется после главы ' + info.requiresChapter + '.') }, [
         h('span', { 'class': 'chapter-tab-title', text: info.shortTitle || info.title }),
         h('span', { 'class': 'chapter-tab-sub', text: (info.grade ? info.grade + ' · ' : '') + (open ? st.explored + '/' + st.total : 'закрыто') })
@@ -230,21 +231,42 @@
     (w.paragraphs || []).forEach(function (p) { content.appendChild(h('p', { text: p })); });
     var go = h('button', { type: 'button', 'class': 'btn btn-primary', 'data-autofocus': '1', text: w.button || 'К карте' });
     content.appendChild(h('div', { 'class': 'task-actions' }, [go]));
-    var m = TI.UI.modal({ title: w.title, content: content, className: 'modal-wide', dismissible: true });
+    var m = TI.UI.modal({ title: w.title, icon: '🌍', content: content, className: 'modal-wide', dismissible: true });
     go.addEventListener('click', m.close);
   }
 
   /* ---------- Основной экран ---------- */
-  function refresh(newIds) {
+  function refresh(newIds, animate) {
     if (mapChapter !== G.getChapter()) initMap();
     TI.Map.render(G.sectorStatus, newIds || []);
     TI.Map.setActive(selectedId);
-    renderTabs(); renderTop(); renderLeft(); renderSector();
+    renderTabs(); renderTop(animate); renderLeft(); renderSector();
   }
 
-  function renderTop() {
-    var st = G.stats(G.getChapter());
-    $('top-points').textContent = String(st.points);
+  /** Полоска опыта: заполнение и подпись для скринридера. */
+  function setXp(barId, fillId, lv) {
+    var bar = $(barId), fill = $(fillId);
+    if (!bar || !fill) return;
+    fill.style.width = lv.pct + '%';
+    bar.setAttribute('aria-valuenow', String(lv.pct));
+    bar.setAttribute('aria-valuetext', lv.next ? 'До уровня «' + lv.next.name + '» осталось очков: ' + lv.toNext : 'Достигнут максимальный уровень');
+  }
+
+  function renderTop(animate) {
+    var st = G.stats(G.getChapter()), all = G.stats(), lv = G.level(), pr = G.getState().progress;
+    var ptsEl = $('top-points');
+    if (animate) TI.UI.countTo(ptsEl, st.points, 800); else ptsEl.textContent = String(st.points);
+    $('hud-icon').textContent = lv.icon; $('hud-rank').textContent = lv.name; $('hud-lvl').textContent = String(lv.n);
+    setXp('xp-bar', 'xp-fill', lv);
+    var starsEl = $('top-stars'), prevStars = parseInt(starsEl.textContent, 10) || 0;
+    starsEl.textContent = String(all.stars);
+    if (animate && all.stars > prevStars) TI.UI.pulse(starsEl.parentNode, 'hud-bump');
+    var stk = $('top-streak'), prevStreak = parseInt(stk.textContent, 10) || 0;
+    stk.textContent = String(pr.streak);
+    var box = $('hud-streak');
+    box.classList.toggle('is-off', pr.streak === 0);
+    box.classList.toggle('is-hot', pr.streak >= 3);
+    if (animate && pr.streak > prevStreak) TI.UI.pulse(box, 'hud-bump');
     $('top-explored').textContent = st.explored + ' / ' + st.total;
     var pct = Math.round(st.explored / st.total * 100);
     var bar = $('top-bar');
@@ -256,15 +278,33 @@
   function listItem(text, cls) { return h('li', { 'class': cls || '', text: text }); }
 
   function renderLeft() {
-    var ch = G.getChapter(), st = G.stats(ch), state = G.getState();
+    var ch = G.getChapter(), st = G.stats(ch), state = G.getState(), lv = G.level(), pr = state.progress;
     $('mission-text').textContent = G.chapter(ch).mission;
+    // карточка ранга
+    $('rank-avatar').textContent = lv.icon; $('rank-n').textContent = String(lv.n); $('rank-name').textContent = lv.name;
+    setXp('rank-xp', 'rank-xp-fill', lv);
+    $('rank-next').textContent = lv.next ? 'До ранга «' + lv.next.name + '» — ещё ' + lv.toNext + ' очков' : 'Максимальный ранг. Вы — легенда!';
     var grid = $('stats');
     grid.innerHTML = '';
-    [['Исследовано территорий', st.explored + ' / ' + st.total], ['Заданий выполнено', st.tasks + ' / ' + st.totalTasks],
-     ['Исследовательские очки', st.points], ['Открытий', st.discoveries + ' / ' + st.totalDiscoveries],
-     ['Полностью изучено', st.full + ' / ' + st.total]].forEach(function (r) {
-      grid.appendChild(h('div', { 'class': 'stat' }, [h('dt', { text: r[0] }), h('dd', { text: String(r[1]) })]));
+    [['🗺️', 'Исследовано территорий', st.explored + ' / ' + st.total], ['✅', 'Заданий выполнено', st.tasks + ' / ' + st.totalTasks],
+     ['🪙', 'Исследовательские очки', st.points], ['⭐', 'Звёзд собрано', st.stars + ' / ' + st.maxStars],
+     ['🔥', 'Лучшая серия', pr.bestStreak], ['💡', 'Открытий', st.discoveries + ' / ' + st.totalDiscoveries],
+     ['🏁', 'Полностью изучено', st.full + ' / ' + st.total]].forEach(function (r) {
+      grid.appendChild(h('div', { 'class': 'stat' }, [h('dt', null, [h('span', { 'class': 'stat-ico', 'aria-hidden': 'true', text: r[0] }), document.createTextNode(r[1])]), h('dd', { text: String(r[2]) })]));
     });
+    // значки
+    var mg = $('medals'); mg.innerHTML = '';
+    var ml = G.medals(), got = ml.filter(function (m) { return m.got; }).length;
+    ml.forEach(function (m) {
+      var b = h('button', { type: 'button', 'class': 'medal ' + (m.got ? 'medal-got' : 'medal-locked'), title: m.name + ' — ' + m.desc,
+        'aria-label': m.name + '. ' + m.desc + (m.got ? ' Получен.' : ' Пока не получен.') }, [
+        h('span', { 'class': 'medal-icon', 'aria-hidden': 'true', text: m.got ? m.icon : '🔒' }),
+        h('span', { 'class': 'medal-name', 'aria-hidden': 'true', text: m.name })
+      ]);
+      b.addEventListener('click', function () { TI.UI.toast((m.got ? m.icon + ' ' : '🔒 ') + m.name + ': ' + m.desc, 'medal'); });
+      mg.appendChild(h('li', null, [b]));
+    });
+    $('medals-note').textContent = 'Получено значков: ' + got + ' из ' + ml.length + '. Нажмите на значок, чтобы узнать, как его получить.';
     var j = $('journal-recent'); j.innerHTML = '';
     state.journal.slice(-4).reverse().forEach(function (e) { j.appendChild(listItem(e.text, 'j-' + e.kind)); });
     var a = $('achievements'); a.innerHTML = '';
@@ -318,7 +358,7 @@
       var label = (t.extra ? 'Дополнительно: ' : 'Задание ' + (i + 1) + ': ') + t.title;
       var btn = h('button', { type: 'button', 'class': 'task-btn' + (done ? ' done' : '') + (can ? '' : ' locked'), 'aria-label': label + '. ' + (done ? 'Выполнено. Можно повторить.' : can ? 'Доступно.' : 'Откроется после исследования территории.') }, [
         h('span', { 'class': 'task-state', 'aria-hidden': 'true', text: done ? '✓' : can ? '▶' : '🔒' }),
-        h('span', { 'class': 'task-name' }, [h('span', { text: label }), h('span', { 'class': 'task-sub', text: TYPE_SHORT[t.type] + ' · +' + G.taskReward(t) + (done ? ' · выполнено' : can ? '' : ' · после исследования') })])
+        h('span', { 'class': 'task-name' }, [h('span', { text: label }), h('span', { 'class': 'task-sub', text: TYPE_SHORT[t.type] + ' · +' + G.taskReward(t) + (done ? ' · выполнено ' + '★'.repeat(G.starsOf(t.id)) + '☆'.repeat(3 - G.starsOf(t.id)) : can ? '' : ' · после исследования') })])
       ]);
       if (!can) btn.disabled = true; else btn.addEventListener('click', function () { openTask(t.id); });
       list.appendChild(h('li', null, [btn]));
@@ -344,21 +384,24 @@
     var container = h('div');
     var lastRes = null, handled = false;
     function after() { if (handled) return; handled = true; afterTask(lastRes); }
-    var m = TI.UI.modal({ title: 'Исследование: ' + sec.name, content: container, className: 'modal-task', onClose: after });
+    var m = TI.UI.modal({ title: 'Исследование: ' + sec.name, icon: '🔍', content: container, className: 'modal-task', onClose: after });
     TI.Tasks.render(container, t, sec, {
       sound: TI.UI.sound,
-      complete: function (task) {
-        var res = G.completeTask(task.id);
+      complete: function (task, opts) {
+        var res = G.completeTask(task.id, opts);
         persist();
         lastRes = res;
         return res;
       },
+      answered: function (ok) { var r = G.registerAnswer(ok); persist(); return r; },
       onFinish: function () { m.close(); }
     });
   }
 
   function afterTask(res) {
     var newIds = res ? res.newSectors : [];
+    if (res && res.newMedals) res.newMedals.forEach(function (id) { var m = G.medal(id); TI.UI.toast('Новый значок: ' + m.icon + ' «' + m.name + '» — ' + m.desc, 'medal'); });
+    if (res && (res.newSectors.length || res.explored)) TI.UI.confetti({ count: 60, y: 0.35 });
     if (res && !res.repeat) {
       if (res.newSectors.length) TI.UI.sound('new');
       res.newSectors.forEach(function (sid) { TI.UI.toast('Обнаружена новая территория: «' + G.sector(sid).name + '».', 'new'); });
@@ -366,7 +409,7 @@
       if (res.explored) TI.UI.toast('Сектор исследован. Новые сведения добавлены в журнал.', 'info');
     }
     if (res && res.newSectors.length) selectedId = res.newSectors[0];
-    refresh(newIds);
+    refresh(newIds, true);
     if (res && res.newSectors.length) setTimeout(function () { TI.Map.focusSector(selectedId); }, 50);
     var ch = G.getChapter();
     if (G.allExplored(ch) && !G.finaleShown(ch)) {
@@ -391,7 +434,9 @@
     var nextCh = G.chapters().filter(function (x) { return x.id === n + 1 && G.chapterUnlocked(x.id); })[0];
     if (nextCh) acts.push(h('button', { type: 'button', 'class': 'btn btn-ghost', 'data-next': '1', text: 'Перейти к главе ' + nextCh.id }));
     c.appendChild(h('div', { 'class': 'task-actions' }, acts));
-    var m = TI.UI.modal({ title: f ? f.title : 'Планета X-01 исследована', content: c, className: 'modal-wide' });
+    var m = TI.UI.modal({ title: f ? f.title : 'Планета X-01 исследована', icon: '🏆', content: c, className: 'modal-wide' });
+    if (TI.UI.confetti) { TI.UI.confetti({ count: 90, y: 0.25 }); TI.UI.confetti({ count: 60, x: 0.2, y: 0.4 }); TI.UI.confetti({ count: 60, x: 0.8, y: 0.4 }); }
+    TI.UI.sound('level');
     ok.addEventListener('click', m.close);
     if (nextCh) acts[1].addEventListener('click', function () { m.close(); switchChapter(nextCh.id); });
   }
@@ -423,14 +468,14 @@
       var dd = G.discovery(d);
       c.appendChild(h('div', { 'class': 'discovery' }, [h('strong', { text: dd.name + ' · ' + dd.category }), h('p', { text: dd.long })]));
     });
-    TI.UI.modal({ title: 'Журнал экспедиции', content: c, className: 'modal-wide' });
+    TI.UI.modal({ title: 'Журнал экспедиции', icon: '📒', content: c, className: 'modal-wide' });
   }
 
   /* ---------- Об игре ---------- */
   function openAbout() {
     var a = G.data.world.about, c = h('div', { 'class': 'intro' });
     a.paragraphs.forEach(function (p) { c.appendChild(h('p', { text: p })); });
-    TI.UI.modal({ title: a.title, content: c, className: 'modal-wide' });
+    TI.UI.modal({ title: a.title, icon: '🌍', content: c, className: 'modal-wide' });
   }
 
   /* ---------- Настройки, экспорт, импорт, сброс ---------- */
@@ -450,7 +495,7 @@
     var imp = h('button', { type: 'button', 'class': 'btn btn-ghost', text: 'Импортировать сохранение' });
     var rst = h('button', { type: 'button', 'class': 'btn btn-danger', text: 'Сбросить прогресс' });
     c.appendChild(h('div', { 'class': 'settings-actions' }, [exp, imp, rst]));
-    var m = TI.UI.modal({ title: 'Настройки', content: c, className: 'modal-small' });
+    var m = TI.UI.modal({ title: 'Настройки', icon: '⚙️', content: c, className: 'modal-small' });
     exp.addEventListener('click', function () {
       if (!started) { TI.UI.toast('Пока нечего экспортировать: экспедиция не начата.', 'info'); return; }
       S.exportState(G.getState()); TI.UI.toast('Файл сохранения скачан: ' + S.exportFileName(), 'info');

@@ -4,9 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="TERRA INCOGNITA — образовательная браузерная игра: исследуйте неизвестную планету и открывайте её территории с помощью географии.">
-  <meta name="theme-color" content="#08131f">
+  <meta name="theme-color" content="#4f35d8">
   <title>TERRA INCOGNITA — исследование планеты X-01</title>
   <link rel="icon" href="assets/icons/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/nunito-cyrillic-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="styles/main.css">
 </head>
 <body data-screen="start">
@@ -17,10 +18,21 @@
 
   <!-- Стартовый экран -->
   <section id="screen-start" class="screen start" aria-labelledby="game-title">
+    <div class="start-sky" aria-hidden="true">
+      <span class="sky-star s1">✦</span><span class="sky-star s2">✦</span><span class="sky-star s3">✧</span>
+      <span class="sky-star s4">✦</span><span class="sky-star s5">✧</span><span class="sky-star s6">✦</span>
+      <span class="sky-cloud c1">☁️</span><span class="sky-cloud c2">☁️</span>
+    </div>
     <div class="start-card">
-      <p class="eyebrow">Экспедиция · планета X-01</p>
+      <p class="eyebrow"><span aria-hidden="true">🚀</span> Экспедиция · планета X-01</p>
       <h1 id="game-title">TERRA INCOGNITA</h1>
       <p class="lead">Неизвестная планета. Небольшой участок берега на экранах и ни одной карты. Исследуйте территории, применяйте знания о рельефе, климате и водах, делайте выводы и открывайте новые земли.</p>
+      <ul class="feature-chips" aria-label="Что вас ждёт в игре">
+        <li class="fchip fchip-1"><span aria-hidden="true">🗺️</span> Новые земли</li>
+        <li class="fchip fchip-2"><span aria-hidden="true">⭐</span> Звёзды за задания</li>
+        <li class="fchip fchip-3"><span aria-hidden="true">🔥</span> Серии ответов</li>
+        <li class="fchip fchip-4"><span aria-hidden="true">🏆</span> Награды и ранги</li>
+      </ul>
       <p id="continue-info" class="continue-info" hidden></p>
       <div class="start-actions">
         <button id="btn-continue" type="button" class="btn btn-primary btn-big" hidden>Продолжить</button>
@@ -30,15 +42,38 @@
       </div>
       <p class="start-foot">Школьникам 5–11 классов · русский язык · прогресс хранится в вашем браузере</p>
     </div>
-    <svg class="start-globe" viewBox="0 0 200 200" aria-hidden="true">
-      <circle cx="100" cy="100" r="92" class="g-sphere"/>
-      <ellipse cx="100" cy="100" rx="92" ry="34" class="g-line"/>
-      <ellipse cx="100" cy="100" rx="40" ry="92" class="g-line"/>
-      <line x1="8" y1="100" x2="192" y2="100" class="g-line"/>
-      <path d="M62 52 L98 44 L118 66 L104 92 L70 88 Z" class="g-land"/>
-      <path d="M96 112 L134 104 L146 134 L118 156 L92 140 Z" class="g-land"/>
-      <path d="M52 118 L70 112 L74 134 L56 140 Z" class="g-land"/>
-    </svg>
+    <div class="start-planet" aria-hidden="true">
+      <svg class="start-globe" viewBox="0 0 240 240">
+        <defs>
+          <radialGradient id="gSphere" cx="35%" cy="30%" r="80%">
+            <stop offset="0" stop-color="#7fe3ff"/>
+            <stop offset=".55" stop-color="#2d9cf0"/>
+            <stop offset="1" stop-color="#1a4fc9"/>
+          </radialGradient>
+          <clipPath id="gClip"><circle cx="120" cy="120" r="84"/></clipPath>
+        </defs>
+        <g transform="rotate(-18 120 120)">
+          <ellipse class="g-orbit" cx="120" cy="120" rx="112" ry="34"/>
+        </g>
+        <circle class="g-sphere" cx="120" cy="120" r="84" fill="url(#gSphere)"/>
+        <g clip-path="url(#gClip)">
+          <g class="g-surface">
+            <path class="g-land" d="M52 78 L92 62 L120 84 L104 112 L66 108 Z"/>
+            <path class="g-land g-land2" d="M118 132 L164 120 L180 154 L146 184 L112 164 Z"/>
+            <path class="g-land g-land3" d="M40 138 L66 130 L72 156 L50 166 Z"/>
+            <path class="g-land" d="M212 78 L252 62 L280 84 L264 112 L226 108 Z"/>
+            <path class="g-land g-land2" d="M278 132 L324 120 L340 154 L306 184 L272 164 Z"/>
+            <path class="g-cloud" d="M70 60 q8 -10 18 -2 q10 -8 18 2 q8 2 4 10 h-44 q-6 -4 4 -10 z"/>
+            <path class="g-cloud" d="M150 150 q8 -10 18 -2 q10 -8 18 2 q8 2 4 10 h-44 q-6 -4 4 -10 z"/>
+          </g>
+          <ellipse cx="96" cy="86" rx="46" ry="30" class="g-shine"/>
+        </g>
+        <circle class="g-rim" cx="120" cy="120" r="84"/>
+        <g transform="rotate(-18 120 120)">
+          <text class="g-rocket" x="0" y="0" font-size="30" text-anchor="middle">🚀<animateMotion dur="11s" repeatCount="indefinite" path="M232 120 A112 34 0 1 1 8 120 A112 34 0 1 1 232 120 Z"/></text>
+        </g>
+      </svg>
+    </div>
   </section>
 
   <!-- Основной игровой экран -->
@@ -55,7 +90,19 @@
           <div id="top-bar-fill" class="bar-fill"></div>
         </div>
       </div>
-      <div class="topbar-points" title="Исследовательские очки"><span class="points-label">Очки</span> <strong id="top-points">0</strong></div>
+      <div class="hud" aria-label="Ваши успехи">
+        <div class="hud-level" title="Ваш уровень">
+          <span id="hud-icon" class="hud-avatar" aria-hidden="true">🐣</span>
+          <span class="hud-level-text">
+            <span class="hud-rank" id="hud-rank">Юнга</span>
+            <span class="hud-level-n">Уровень <b id="hud-lvl">1</b></span>
+          </span>
+          <div id="xp-bar" class="xp" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="xp-fill" class="xp-fill"></div></div>
+        </div>
+        <div class="hud-chip hud-points topbar-points" title="Исследовательские очки"><span aria-hidden="true">🪙</span> <span class="points-label">Очки</span> <strong id="top-points">0</strong></div>
+        <div class="hud-chip hud-stars" title="Звёзды за задания"><span aria-hidden="true">⭐</span> <span class="sr-only">Звёзд:</span> <strong id="top-stars">0</strong></div>
+        <div class="hud-chip hud-streak" id="hud-streak" title="Серия верных ответов подряд"><span aria-hidden="true">🔥</span> <span class="sr-only">Серия:</span> <strong id="top-streak">0</strong></div>
+      </div>
       <div class="topbar-buttons">
         <button id="btn-journal" type="button" class="btn btn-ghost">Журнал</button>
         <button id="btn-settings-g" type="button" class="btn btn-ghost">Настройки</button>
@@ -80,21 +127,35 @@
       </aside>
 
       <aside id="panel-left" class="panel panel-left" aria-label="Журнал и прогресс">
+        <section class="rank-card" aria-label="Ваше звание">
+          <div id="rank-avatar" class="rank-avatar" aria-hidden="true">🐣</div>
+          <div class="rank-info">
+            <p class="rank-level">Уровень <b id="rank-n">1</b></p>
+            <p id="rank-name" class="rank-name">Юнга</p>
+            <div id="rank-xp" class="xp xp-big" role="progressbar" aria-label="Опыт до следующего уровня" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="rank-xp-fill" class="xp-fill"></div></div>
+            <p id="rank-next" class="rank-next"></p>
+          </div>
+        </section>
         <section>
-          <h2>Миссия</h2>
+          <h2><span aria-hidden="true">🎯</span> Миссия</h2>
           <p id="mission-text"></p>
         </section>
         <section>
-          <h2>Прогресс</h2>
+          <h2><span aria-hidden="true">📊</span> Прогресс</h2>
           <dl id="stats" class="stats"></dl>
         </section>
         <section>
-          <h2>Журнал экспедиции</h2>
+          <h2><span aria-hidden="true">🎖️</span> Значки</h2>
+          <ul id="medals" class="medal-grid"></ul>
+          <p id="medals-note" class="note"></p>
+        </section>
+        <section>
+          <h2><span aria-hidden="true">📒</span> Журнал экспедиции</h2>
           <ul id="journal-recent" class="journal-list"></ul>
           <button id="btn-journal-2" type="button" class="btn btn-ghost btn-wide">Открыть журнал</button>
         </section>
         <section>
-          <h2>Достижения</h2>
+          <h2><span aria-hidden="true">🏆</span> Достижения</h2>
           <ul id="achievements" class="ach-list"></ul>
         </section>
       </aside>
@@ -102,6 +163,7 @@
   </section>
 
   <div id="toasts" class="toasts" role="status" aria-live="polite"></div>
+  <div id="fx" class="fx" aria-hidden="true"></div>
   <input id="import-file" type="file" accept="application/json,.json" hidden>
 
   <script src="scripts/data-bundle.js"></script>

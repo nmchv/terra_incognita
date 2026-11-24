@@ -9,6 +9,15 @@
     explored: 'Исследована', full: 'Полностью изучена'
   };
   var GLYPH = { hidden: '?', discovered: '!', exploring: '…', explored: '✓', full: '★' };
+  /** Значок территории по её типу (поле type в данных главы). Для неизвестного типа — булавка. */
+  var TYPE_EMOJI = {
+    coastal_plain: '🏖️', mountains: '⛰️', rain_shadow_plain: '🌾', river_valley: '🏞️', basin: '🏕️', forest: '🌲',
+    volcanic: '🌋', island: '🏝️', polar: '🧊', desert: '🏜️', delta: '🌿', ocean_current: '🌊',
+    africa: '🦁', antarctica: '🐧', atmo: '☁️', australia: '🦘', climate: '🌡️', eurasia: '🐻', litho: '🪨',
+    namerica: '🦅', ocean_world: '🐋', peoples: '🧑‍🤝‍🧑', population: '👥', samerica: '🦜', shell: '🌍', society: '🏙️',
+    borders: '🚧', capital: '🏛️', climate_ru: '❄️', geology: '⛏️', hazards: '⚠️', hist: '📜', peoples_ru: '🧑‍🤝‍🧑',
+    pop_ru: '👥', regions: '🗺️', resources: '🛢️', settle: '🏘️', time: '🕐', waters: '💧', zones: '🌳'
+  };
 
   function el(name, attrs, parent) {
     var e = document.createElementNS(NS, name);
@@ -31,19 +40,29 @@
   function buildStatic(view) {
     var defs = el('defs', null, svg);
     var g = el('linearGradient', { id: 'oceanGrad', x1: '0', y1: '0', x2: '0', y2: '1' }, defs);
-    el('stop', { offset: '0', 'stop-color': '#0b2038' }, g);
-    el('stop', { offset: '1', 'stop-color': '#071626' }, g);
-    var pHatch = el('pattern', { id: 'pat-hatch', width: '10', height: '10', patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
-    el('rect', { width: '10', height: '10', fill: '#13304a' }, pHatch);
-    el('line', { x1: '0', y1: '0', x2: '0', y2: '10', stroke: '#2a6f86', 'stroke-width': '3' }, pHatch);
-    var pDots = el('pattern', { id: 'pat-dots', width: '12', height: '12', patternUnits: 'userSpaceOnUse' }, defs);
-    el('rect', { width: '12', height: '12', fill: '#1b4a63' }, pDots);
-    el('circle', { cx: '6', cy: '6', r: '2.2', fill: '#7fd6d0' }, pDots);
-    var pFog = el('pattern', { id: 'pat-fog', width: '14', height: '14', patternUnits: 'userSpaceOnUse' }, defs);
-    el('rect', { width: '14', height: '14', fill: '#0c1b2c' }, pFog);
-    el('path', { d: 'M0 14 L14 0', stroke: '#16293d', 'stroke-width': '1.5' }, pFog);
+    el('stop', { offset: '0', 'stop-color': '#43cdf6' }, g);
+    el('stop', { offset: '1', 'stop-color': '#1d8fe3' }, g);
+    // обнаруженная территория: тёплая «зовущая» штриховка
+    var pHatch = el('pattern', { id: 'pat-hatch', width: '12', height: '12', patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' }, defs);
+    el('rect', { width: '12', height: '12', fill: '#ffe98a' }, pHatch);
+    el('line', { x1: '0', y1: '0', x2: '0', y2: '12', stroke: '#ffb703', 'stroke-width': '4' }, pHatch);
+    // исследуется: сиреневые точки
+    var pDots = el('pattern', { id: 'pat-dots', width: '14', height: '14', patternUnits: 'userSpaceOnUse' }, defs);
+    el('rect', { width: '14', height: '14', fill: '#ddd2ff' }, pDots);
+    el('circle', { cx: '7', cy: '7', r: '3', fill: '#7c3aed' }, pDots);
+    // не обнаружена: светлая дымка
+    var pFog = el('pattern', { id: 'pat-fog', width: '16', height: '16', patternUnits: 'userSpaceOnUse' }, defs);
+    el('rect', { width: '16', height: '16', fill: '#d9ecff' }, pFog);
+    el('path', { d: 'M0 16 L16 0', stroke: '#ffffff', 'stroke-width': '2' }, pFog);
+    // волны на воде
+    var pWave = el('pattern', { id: 'pat-waves', width: '70', height: '36', patternUnits: 'userSpaceOnUse' }, defs);
+    el('path', { d: 'M4 18 q8 -9 16 0 t16 0 t16 0', fill: 'none', stroke: '#ffffff', 'stroke-width': '2.5', 'stroke-linecap': 'round', opacity: '.35' }, pWave);
+    // тень под сушей
+    var f = el('filter', { id: 'land-shadow', x: '-10%', y: '-10%', width: '120%', height: '125%' }, defs);
+    el('feDropShadow', { dx: '0', dy: '5', stdDeviation: '0', 'flood-color': '#1b3a8a', 'flood-opacity': '.45' }, f);
 
     el('rect', { x: '0', y: '0', width: view.mapWidth, height: view.mapHeight, fill: 'url(#oceanGrad)' }, svg);
+    el('rect', { x: '0', y: '0', width: view.mapWidth, height: view.mapHeight, fill: 'url(#pat-waves)', 'aria-hidden': 'true' }, svg);
     var grid = el('g', { 'class': 'graticule', 'aria-hidden': 'true' }, svg);
     for (var x = 100; x < view.mapWidth; x += 100) el('line', { x1: x, y1: 0, x2: x, y2: view.mapHeight }, grid);
     for (var y = 100; y < view.mapHeight; y += 100) el('line', { x1: 0, y1: y, x2: view.mapWidth, y2: y }, grid);
@@ -89,10 +108,13 @@
       var poly = el('polygon', { points: s.poly, 'class': 'sector-shape' }, g);
       var tl = el('title', null, g);
       var badge = el('g', { 'class': 'badge', transform: 'translate(' + s.center[0] + ' ' + (s.center[1] - 14) + ')' }, labelLayer);
-      el('circle', { r: '17' }, badge);
-      var gl = el('text', { 'class': 'badge-glyph', 'text-anchor': 'middle', y: '7' }, badge);
+      el('circle', { r: '21', 'class': 'badge-disc' }, badge);
+      var em = el('text', { 'class': 'badge-emoji', 'text-anchor': 'middle', y: '8' }, badge);
+      var chipG = el('g', { 'class': 'badge-chip', transform: 'translate(16 -16)' }, badge);
+      el('circle', { r: '10' }, chipG);
+      var gl = el('text', { 'class': 'badge-glyph', 'text-anchor': 'middle', y: '4.5' }, chipG);
       var label = el('text', { 'class': 'sector-name', 'text-anchor': 'middle', x: s.center[0], y: s.center[1] + 28 }, labelLayer);
-      nodes[s.id] = { g: g, poly: poly, title: tl, glyph: gl, label: label, badge: badge, s: s };
+      nodes[s.id] = { g: g, poly: poly, title: tl, glyph: gl, emoji: em, label: label, badge: badge, s: s };
       svg.insertBefore(g, routeLayer);
       g.addEventListener('click', function () { if (g.getAttribute('data-status') !== 'hidden') onSelect(s.id); });
       g.addEventListener('keydown', function (ev) {
@@ -121,6 +143,7 @@
       n.g.classList.toggle('active', id === activeId);
       n.glyph.textContent = GLYPH[st];
       var visible = st !== 'hidden';
+      n.emoji.textContent = visible ? (TYPE_EMOJI[n.s.type] || '📍') : '❓';
       renderLabel(n, visible);
       if (visible) {
         n.g.setAttribute('role', 'button'); n.g.setAttribute('tabindex', '0'); n.g.removeAttribute('aria-hidden');

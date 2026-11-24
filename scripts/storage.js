@@ -39,7 +39,12 @@
         finaleShown: false,
         chapter: 1,
         introChapters: [],
-        finaleChapters: []
+        finaleChapters: [],
+        taskStars: {},      // id задания → 1..3 звезды (лучший результат)
+        streak: 0,          // текущая серия верных ответов подряд
+        bestStreak: 0,
+        mistakes: 0,        // всего неверных ответов
+        medalIds: []        // полученные значки (награды за игровые достижения)
       },
       journal: [],
       settings: { soundEnabled: false, animationsEnabled: !prefersReducedMotion() }
@@ -105,7 +110,12 @@
         finaleShown: !!obj.progress.finaleShown,
         chapter: typeof obj.progress.chapter === 'number' && obj.progress.chapter >= 1 ? Math.floor(obj.progress.chapter) : 1,
         introChapters: numList(obj.progress.introChapters),
-        finaleChapters: numList(obj.progress.finaleChapters)
+        finaleChapters: numList(obj.progress.finaleChapters),
+        taskStars: starMap(obj.progress.taskStars),
+        streak: nat(obj.progress.streak),
+        bestStreak: Math.max(nat(obj.progress.bestStreak), nat(obj.progress.streak)),
+        mistakes: nat(obj.progress.mistakes),
+        medalIds: isArr(obj.progress.medalIds) ? uniq(obj.progress.medalIds.filter(function (x) { return typeof x === 'string'; })) : []
       },
       journal: obj.journal.slice(-30).map(function (e) {
         return { t: typeof e.t === 'string' ? e.t : base.createdAt, text: e.text, kind: typeof e.kind === 'string' ? e.kind : 'info' };
@@ -118,6 +128,16 @@
     return s;
   }
   function uniq(a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); }
+  /** Неотрицательное целое; всё остальное (в том числе поля старых сохранений) даёт 0. */
+  function nat(x) { return typeof x === 'number' && isFinite(x) && x > 0 ? Math.floor(x) : 0; }
+  /** Звёзды за задания: оставляем только записи вида «строка → 1, 2 или 3». */
+  function starMap(m) {
+    var out = {};
+    if (m && typeof m === 'object' && !isArr(m)) {
+      Object.keys(m).forEach(function (k) { var v = m[k]; if (v === 1 || v === 2 || v === 3) out[k] = v; });
+    }
+    return out;
+  }
   /** Необязательный список номеров глав (в старых сохранениях его нет). */
   function numList(a) { return isArr(a) ? uniq(a.filter(function (x) { return typeof x === 'number' && isFinite(x); })) : []; }
 
